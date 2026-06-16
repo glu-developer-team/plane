@@ -65,6 +65,13 @@ set -a
 source "$PLANE_ENV"
 set +a
 
+# Self-hosted deploy always pins to current git commit (override plane.env APP_RELEASE=develop)
+if git -C "$REPO_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  APP_RELEASE="$(git -C "$REPO_ROOT" rev-parse --short HEAD)"
+else
+  APP_RELEASE="${APP_RELEASE:-develop}"
+fi
+
 compose_file() {
   if ! truthy "${USE_BUNDLED_DB:-true}" || \
      ! truthy "${USE_BUNDLED_REDIS:-true}" || \
@@ -82,25 +89,17 @@ compose_args() {
 
 compose() {
   compose_args
-  docker compose "${COMPOSE_ARGS[@]}" --env-file "$PLANE_ENV" "$@"
+  docker compose -p "$COMPOSE_PROJECT_NAME" "${COMPOSE_ARGS[@]}" --env-file "$PLANE_ENV" "$@"
 }
 
 compose_build() {
   compose_args
-  docker compose \
+  docker compose -p "$COMPOSE_PROJECT_NAME" \
     "${COMPOSE_ARGS[@]}" \
     -f "${DEPLOY_DIR}/docker-compose.build.yml" \
     --env-file "$PLANE_ENV" \
     "$@"
 }
-
-if [[ -z "${APP_RELEASE:-}" ]]; then
-  if git -C "$REPO_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    APP_RELEASE="$(git -C "$REPO_ROOT" rev-parse --short HEAD)"
-  else
-    APP_RELEASE="develop"
-  fi
-fi
 
 export DOCKERHUB_USER APP_RELEASE COMPOSE_PROJECT_NAME
 
