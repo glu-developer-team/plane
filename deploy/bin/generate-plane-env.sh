@@ -84,9 +84,12 @@ q_aws_secret="$(env_quote "${AWS_SECRET_ACCESS_KEY}")"
 q_db_url="$(env_quote "${local_db_url}")"
 q_amqp_url="$(env_quote "amqp://${RABBITMQ_USER:-plane}:${RABBITMQ_PASSWORD}@plane-mq:5672/${RABBITMQ_VHOST:-plane}")"
 
-mkdir -p "$(dirname "$PLANE_ENV")"
+plane_env_dir="$(dirname "$PLANE_ENV")"
+tmp_file="$(mktemp)"
+trap 'rm -f "$tmp_file"' EXIT
 
-cat >"$PLANE_ENV" <<EOF
+write_header() {
+  cat >"$tmp_file" <<EOF
 # Generated from ${OPERATOR_ENV} — do not edit by hand; re-run generate-plane-env.sh
 
 APP_DOMAIN=${APP_DOMAIN}
@@ -167,12 +170,39 @@ API_KEY_RATE_LIMIT=${API_KEY_RATE_LIMIT:-6000/minute}
 WEBHOOK_ALLOWED_IPS=
 WEBHOOK_ALLOWED_HOSTS=
 EOF
+}
+
+can_write_plane_env() {
+  [[ -w "$plane_env_dir" ]] && { [[ ! -e "$PLANE_ENV" ]] || [[ -w "$PLANE_ENV" ]]; }
+}
+
+install_plane_env() {
+  local owner group
+  owner="$(id -un)"
+  group="$(id -gn)"
+
+  if can_write_plane_env; then
+    mkdir -p "$plane_env_dir"
+    install -m 600 "$tmp_file" "$PLANE_ENV"
+    return
+  fi
+
+  if ! command -v sudo >/dev/null 2>&1; then
+    die "Cannot write ${PLANE_ENV} — fix permissions or run: sudo mkdir -p ${plane_env_dir} && sudo chown ${owner}:${group} ${plane_env_dir}"
+  fi
+
+  sudo mkdir -p "$plane_env_dir"
+  sudo install -m 600 -o "$owner" -g "$group" "$tmp_file" "$PLANE_ENV"
+  log "Installed ${PLANE_ENV} via sudo (owner: ${owner})"
+}
+
+write_header
 
 if truthy "${ENABLE_SMTP:-false}" && [[ -n "${EMAIL_HOST:-}" ]]; then
   q_email_user="$(env_quote "${EMAIL_HOST_USER}")"
   q_email_pass="$(env_quote "${EMAIL_HOST_PASSWORD}")"
   q_email_from="$(env_quote "${EMAIL_FROM}")"
-  cat >>"$PLANE_ENV" <<EOF
+  cat >>"$tmp_file" <<EOF
 
 EMAIL_HOST=${EMAIL_HOST}
 EMAIL_PORT=${EMAIL_PORT:-587}
@@ -185,5 +215,5 @@ SKIP_ENV_VAR=${SKIP_ENV_VAR:-0}
 EOF
 fi
 
-chmod 600 "$PLANE_ENV" 2>/dev/null || true
+install_plane_env
 log "Generated ${PLANE_ENV}"

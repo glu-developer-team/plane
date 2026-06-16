@@ -40,10 +40,14 @@ sudo usermod -aG docker ubuntu
 Port biến từ `bita-plane/.env` → `/opt/plane/operator.env`:
 
 ```bash
+sudo mkdir -p /opt/plane
+sudo chown "$USER:$USER" /opt/plane   # một lần — tránh Permission denied
 sudo cp deploy/operator.env.example /opt/plane/operator.env
 sudo vim /opt/plane/operator.env   # paste passwords/SMTP từ plane.env cũ
 OPERATOR_ENV=/opt/plane/operator.env PLANE_ENV=/opt/plane/plane.env ./deploy/bin/generate-plane-env.sh
 ```
+
+Script tự dùng `sudo install` nếu `/opt/plane` thuộc root và user không ghi được.
 
 Biến map 1:1 từ deploy cũ:
 
