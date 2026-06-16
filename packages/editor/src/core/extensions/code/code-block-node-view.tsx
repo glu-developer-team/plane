@@ -11,7 +11,7 @@ import { useState } from "react";
 import { CopyIcon } from "@plane/propel/icons";
 import { Tooltip } from "@plane/propel/tooltip";
 import { cn } from "@plane/utils";
-import { MermaidDiagram } from "@/core/components/mermaid/mermaid-diagram";
+import { MermaidDiagram } from "@/components/mermaid/mermaid-diagram";
 import type { TCodeBlockAttributes } from "./types";
 import { ECodeBlockAttributeNames } from "./types";
 
