@@ -150,6 +150,7 @@ AMQP_URL=${q_amqp_url}
 CERT_ACME_CA=https://acme-v02.api.letsencrypt.org/directory
 TRUSTED_PROXIES=0.0.0.0/0
 SITE_ADDRESS=:80
+CERT_EMAIL=
 CERT_ACME_DNS=
 
 SECRET_KEY=${q_secret}
