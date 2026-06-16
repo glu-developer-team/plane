@@ -1,0 +1,33 @@
+# Build overlay — merge with docker-compose.yml
+# Images are built locally on the self-hosted runner (no registry push).
+
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile.web
+
+  space:
+    build:
+      context: ..
+      dockerfile: apps/space/Dockerfile.space
+
+  admin:
+    build:
+      context: ..
+      dockerfile: apps/admin/Dockerfile.admin
+
+  live:
+    build:
+      context: ..
+      dockerfile: apps/live/Dockerfile.live
+
+  api:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile.api
+
+  proxy:
+    build:
+      context: ../apps/proxy
+      dockerfile: Dockerfile.ce

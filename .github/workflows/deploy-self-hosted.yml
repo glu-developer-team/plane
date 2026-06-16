@@ -1,0 +1,65 @@
+name: Deploy (self-hosted)
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+    inputs:
+      skip_build:
+        description: Skip docker build (reuse existing images)
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-self-hosted
+  cancel-in-progress: false
+
+env:
+  PLANE_ENV: /opt/plane/plane.env
+  DOCKERHUB_USER: plane-local
+  COMPOSE_PROJECT_NAME: plane
+
+jobs:
+  deploy:
+    name: Build & Deploy
+    runs-on: self-hosted
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify plane.env
+        run: |
+          if [ ! -f "${PLANE_ENV}" ]; then
+            echo "::error::Missing ${PLANE_ENV} on runner."
+            echo "Run once on server:"
+            echo "  sudo mkdir -p /opt/plane"
+            echo "  sudo cp deploy/plane.env.example ${PLANE_ENV}"
+            echo "  sudo vim ${PLANE_ENV}"
+            exit 1
+          fi
+
+      - name: Generate nginx config
+        run: |
+          chmod +x deploy/bin/generate-nginx.sh
+          PLANE_ENV="${PLANE_ENV}" ./deploy/bin/generate-nginx.sh
+
+      - name: Build & deploy
+        run: |
+          chmod +x deploy/bin/deploy.sh
+          ARGS=""
+          if [ "${{ inputs.skip_build }}" = "true" ]; then
+            ARGS="--skip-build"
+          fi
+          PLANE_ENV="${PLANE_ENV}" ./deploy/bin/deploy.sh ${ARGS} --nginx-reload
+
+      - name: Summary
+        if: always()
+        run: |
+          APP_RELEASE="$(git rev-parse --short HEAD)"
+          echo "## Deploy summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Release tag:** \`${APP_RELEASE}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Images:** \`${DOCKERHUB_USER}/plane-*:${APP_RELEASE}\`" >> "$GITHUB_STEP_SUMMARY"
+          docker compose -f deploy/docker-compose.yml --env-file "${PLANE_ENV}" ps >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
