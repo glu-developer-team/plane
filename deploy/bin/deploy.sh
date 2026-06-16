@@ -49,7 +49,50 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ -f "$PLANE_ENV" ]] || die "Missing plane.env at ${PLANE_ENV} — copy deploy/plane.env.example"
+[[ -f "$PLANE_ENV" ]] || die "Missing plane.env at ${PLANE_ENV} — run generate-plane-env.sh or copy deploy/plane.env.example"
+
+truthy() {
+  local v
+  v="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  case "$v" in
+    true|1|yes|y) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+set -a
+# shellcheck disable=SC1090
+source "$PLANE_ENV"
+set +a
+
+compose_file() {
+  if ! truthy "${USE_BUNDLED_DB:-true}" || \
+     ! truthy "${USE_BUNDLED_REDIS:-true}" || \
+     ! truthy "${USE_BUNDLED_MINIO:-true}"; then
+    printf '%s/docker-compose.external.yml' "$DEPLOY_DIR"
+  fi
+}
+
+compose_args() {
+  COMPOSE_ARGS=(-f "${DEPLOY_DIR}/docker-compose.yml")
+  local external
+  external="$(compose_file)"
+  [[ -n "$external" ]] && COMPOSE_ARGS+=(-f "$external")
+}
+
+compose() {
+  compose_args
+  docker compose "${COMPOSE_ARGS[@]}" --env-file "$PLANE_ENV" "$@"
+}
+
+compose_build() {
+  compose_args
+  docker compose \
+    "${COMPOSE_ARGS[@]}" \
+    -f "${DEPLOY_DIR}/docker-compose.build.yml" \
+    --env-file "$PLANE_ENV" \
+    "$@"
+}
 
 if [[ -z "${APP_RELEASE:-}" ]]; then
   if git -C "$REPO_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
@@ -63,18 +106,6 @@ export DOCKERHUB_USER APP_RELEASE COMPOSE_PROJECT_NAME
 
 log "Release: ${DOCKERHUB_USER}/plane-*:${APP_RELEASE}"
 log "Env file: ${PLANE_ENV}"
-
-compose() {
-  docker compose -f "${DEPLOY_DIR}/docker-compose.yml" --env-file "$PLANE_ENV" "$@"
-}
-
-compose_build() {
-  docker compose \
-    -f "${DEPLOY_DIR}/docker-compose.yml" \
-    -f "${DEPLOY_DIR}/docker-compose.build.yml" \
-    --env-file "$PLANE_ENV" \
-    "$@"
-}
 
 if [[ "$SKIP_BUILD" == "false" ]]; then
   log "Building images (this may take 15-30 minutes on first run)..."
@@ -116,8 +147,10 @@ if command -v docker >/dev/null 2>&1; then
 fi
 
 if [[ "$NGINX_RELOAD" == "true" ]]; then
-  NGINX_CONF="${NGINX_CONF:-/etc/nginx/conf.d/plane.conf}"
-  if [[ -f "${DEPLOY_DIR}/nginx/plane.conf" ]]; then
+  if ! truthy "${USE_NGINX_PROXY:-true}"; then
+    warn "USE_NGINX_PROXY=false — skipping nginx reload"
+  elif [[ -f "${DEPLOY_DIR}/nginx/plane.conf" ]]; then
+    NGINX_CONF="${NGINX_CONF_PATH:-/etc/nginx/conf.d/plane.conf}"
     log "Deploying nginx config → ${NGINX_CONF}"
     sudo cp "${DEPLOY_DIR}/nginx/plane.conf" "$NGINX_CONF"
     sudo nginx -t

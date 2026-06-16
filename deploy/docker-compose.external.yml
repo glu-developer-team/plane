@@ -1,0 +1,29 @@
+# External infra overlay — dùng khi USE_BUNDLED_DB/REDIS/MINIO=false trong plane.env
+# deploy/bin/deploy.sh tự chọn file này
+
+services:
+  api:
+    depends_on:
+      - plane-mq
+
+  worker:
+    depends_on:
+      - api
+      - plane-mq
+
+  beat-worker:
+    depends_on:
+      - api
+      - plane-mq
+
+  migrator:
+    depends_on: []
+
+  plane-db:
+    profiles: ["disabled"]
+
+  plane-redis:
+    profiles: ["disabled"]
+
+  plane-minio:
+    profiles: ["disabled"]

@@ -35,21 +35,28 @@ curl -fsSL https://get.docker.com | sh
 sudo usermod -aG docker ubuntu
 ```
 
-### 3. Tạo plane.env
+### 3. Tạo env từ deploy cũ (bita-plane)
+
+Port biến từ `bita-plane/.env` → `/opt/plane/operator.env`:
 
 ```bash
-sudo mkdir -p /opt/plane
-sudo cp plane/deploy/plane.env.example /opt/plane/plane.env
-sudo vim /opt/plane/plane.env   # điền domain, password, secret key
-sudo chmod 600 /opt/plane/plane.env
+sudo cp deploy/operator.env.example /opt/plane/operator.env
+sudo vim /opt/plane/operator.env   # paste passwords/SMTP từ plane.env cũ
+OPERATOR_ENV=/opt/plane/operator.env PLANE_ENV=/opt/plane/plane.env ./deploy/bin/generate-plane-env.sh
 ```
 
-Generate secrets:
+Biến map 1:1 từ deploy cũ:
 
-```bash
-openssl rand -hex 32   # SECRET_KEY
-openssl rand -hex 32   # LIVE_SERVER_SECRET_KEY
-```
+| bita-plane `.env` | plane `operator.env` |
+|-------------------|----------------------|
+| `APP_DOMAIN`, `WEB_URL`, `CORS_*` | giữ nguyên |
+| `NGINX_*`, `SSL_*`, `PLANE_UPSTREAM_*` | giữ nguyên |
+| `USE_BUNDLED_DB/REDIS/MINIO` | giữ nguyên |
+| `POSTGRES_*`, `RABBITMQ_*`, `AWS_*` | giữ nguyên |
+| `ENABLE_SMTP`, `EMAIL_*` | giữ nguyên |
+| `SECRET_KEY`, `LIVE_SERVER_SECRET_KEY` | paste từ plane.env cũ |
+
+`generate-plane-env.sh` sinh `/opt/plane/plane.env` đúng format deploy cũ (`WEB_REPLICAS`, `TRUSTED_PROXIES`, `PGHOST`, ...).
 
 ### 4. Nginx + SSL
 
