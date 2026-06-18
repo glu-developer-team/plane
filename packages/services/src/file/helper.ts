@@ -49,17 +49,32 @@ const validateFilename = (filename: string): string | null => {
   return null;
 };
 
+export type TFileUploadPayload =
+  | { method: "POST"; data: FormData }
+  | { method: "PUT"; file: File; contentType: string };
+
 /**
  * @description from the provided signed URL response, generate a payload to be used to upload the file
  * @param {TFileSignedURLResponse} signedURLResponse
  * @param {File} file
- * @returns {FormData} file upload request payload
+ * @returns {TFileUploadPayload} file upload request payload
  */
-export const generateFileUploadPayload = (signedURLResponse: TFileSignedURLResponse, file: File): FormData => {
+export const generateFileUploadPayload = (
+  signedURLResponse: TFileSignedURLResponse,
+  file: File
+): TFileUploadPayload => {
+  if (signedURLResponse.upload_data.method === "PUT") {
+    return {
+      method: "PUT",
+      file,
+      contentType: signedURLResponse.upload_data.fields["Content-Type"],
+    };
+  }
+
   const formData = new FormData();
   Object.entries(signedURLResponse.upload_data.fields).forEach(([key, value]) => formData.append(key, value));
   formData.append("file", file);
-  return formData;
+  return { method: "POST", data: formData };
 };
 
 /**

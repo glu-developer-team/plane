@@ -66,6 +66,34 @@ class S3Storage(S3Boto3Storage):
         """Generate a presigned URL to upload an S3 object"""
         if expiration is None:
             expiration = self.signed_url_expiration
+
+        # R2 and some S3-compatible stores do not implement presigned POST (returns 501).
+        # Use presigned PUT for direct browser uploads when not on bundled MinIO.
+        if os.environ.get("USE_MINIO") != "1":
+            try:
+                url = self.s3_client.generate_presigned_url(
+                    "put_object",
+                    Params={
+                        "Bucket": self.aws_storage_bucket_name,
+                        "Key": str(object_name),
+                        "ContentType": file_type,
+                    },
+                    ExpiresIn=expiration,
+                    HttpMethod="PUT",
+                )
+            except ClientError as e:
+                log_exception(e)
+                return None
+
+            return {
+                "url": url,
+                "fields": {
+                    "Content-Type": file_type,
+                    "key": object_name,
+                },
+                "method": "PUT",
+            }
+
         fields = {"Content-Type": file_type}
 
         conditions = [

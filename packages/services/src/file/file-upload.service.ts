@@ -4,9 +4,10 @@
  * See the LICENSE file for details.
  */
 
-import axios from "axios";
+import axios, { type AxiosRequestConfig } from "axios";
 // api service
 import { APIService } from "../api.service";
+import type { TFileUploadPayload } from "./helper";
 
 /**
  * Service class for handling file upload operations
@@ -27,15 +28,30 @@ export class FileUploadService extends APIService {
    * @returns {Promise<void>} Promise resolving to void
    * @throws {Error} If the request fails
    */
-  async uploadFile(url: string, data: FormData): Promise<void> {
+  async uploadFile(
+    url: string,
+    payload: TFileUploadPayload,
+    uploadProgressHandler?: AxiosRequestConfig["onUploadProgress"]
+  ): Promise<void> {
     this.cancelSource = axios.CancelToken.source();
-    return this.post(url, data, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
+    const config: AxiosRequestConfig = {
       cancelToken: this.cancelSource.token,
       withCredentials: false,
-    })
+      onUploadProgress: uploadProgressHandler,
+    };
+
+    const request =
+      payload.method === "PUT"
+        ? axios.put(url, payload.file, {
+            ...config,
+            headers: { "Content-Type": payload.contentType },
+          })
+        : this.post(url, payload.data, {
+            ...config,
+            headers: { "Content-Type": "multipart/form-data" },
+          });
+
+    return request
       .then((response) => response?.data)
       .catch((error) => {
         if (axios.isCancel(error)) {

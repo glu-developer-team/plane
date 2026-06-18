@@ -28,12 +28,13 @@ export type TFileSignedURLResponse = {
     fields: {
       "Content-Type": string;
       key: string;
-      "x-amz-algorithm": string;
-      "x-amz-credential": string;
-      "x-amz-date": string;
-      policy: string;
-      "x-amz-signature": string;
+      "x-amz-algorithm"?: string;
+      "x-amz-credential"?: string;
+      "x-amz-date"?: string;
+      policy?: string;
+      "x-amz-signature"?: string;
     };
+    method?: "POST" | "PUT";
   };
 };
 

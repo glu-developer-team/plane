@@ -9,13 +9,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Transition } from "@headlessui/react";
 import { observer } from "mobx-react";
-import { useParams } from "next/navigation";
-// plane imports
 import type { TPageNavigationTabs } from "@plane/types";
-// plane web hooks
 import type { EPageStoreType } from "@/plane-web/hooks/store";
 import { usePage, usePageStore } from "@/plane-web/hooks/store";
-// local components
 import { PageListBlock } from "./block";
 
 type TPageListBlockRoot = {
@@ -23,22 +19,32 @@ type TPageListBlockRoot = {
   pageId: string;
   storeType: EPageStoreType;
   pageType?: TPageNavigationTabs;
+  selectedPageId?: string;
+  variant?: "default" | "sidebar";
   expandedPageIds?: string[];
   setExpandedPageIds?: React.Dispatch<React.SetStateAction<string[]>>;
 };
 
 export const PageListBlockRoot = observer(function PageListBlockRoot(props: TPageListBlockRoot) {
-  const { paddingLeft, pageId, storeType, pageType, expandedPageIds = [], setExpandedPageIds } = props;
+  const {
+    paddingLeft,
+    pageId,
+    storeType,
+    pageType,
+    selectedPageId,
+    variant = "default",
+    expandedPageIds = [],
+    setExpandedPageIds,
+  } = props;
   const [localIsExpanded, setLocalIsExpanded] = useState(false);
   const [subPagesLoaded, setSubPagesLoaded] = useState(false);
-  const { pageId: currentPageIdParam } = useParams();
   const { getPageById } = usePageStore(storeType);
   const page = usePage({
     pageId,
     storeType,
   });
 
-  const isActivePage = currentPageIdParam && currentPageIdParam.toString() === pageId;
+  const isActivePage = selectedPageId === pageId;
   const isExpanded = setExpandedPageIds ? expandedPageIds.includes(pageId) : localIsExpanded;
   const { sub_pages_count, subPageIds } = page ?? {};
   const shouldShowSubPages = isExpanded && sub_pages_count !== undefined && sub_pages_count > 0;
@@ -93,10 +99,12 @@ export const PageListBlockRoot = observer(function PageListBlockRoot(props: TPag
       <PageListBlock
         handleToggleExpanded={handleToggleExpanded}
         isExpanded={isExpanded}
+        isSelected={isActivePage}
         paddingLeft={paddingLeft}
         pageId={pageId}
         storeType={storeType}
         pageType={pageType}
+        variant={variant}
       />
       {shouldShowSubPages && (
         <Transition
@@ -112,10 +120,12 @@ export const PageListBlockRoot = observer(function PageListBlockRoot(props: TPag
             {subPageIds?.map((subPageId) => (
               <PageListBlockRoot
                 key={subPageId}
-                paddingLeft={paddingLeft + 26}
+                paddingLeft={paddingLeft + 20}
                 pageId={subPageId}
                 storeType={storeType}
                 pageType={pageType}
+                selectedPageId={selectedPageId}
+                variant={variant}
                 expandedPageIds={expandedPageIds}
                 setExpandedPageIds={setExpandedPageIds}
               />
