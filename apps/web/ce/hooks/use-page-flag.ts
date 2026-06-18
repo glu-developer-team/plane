@@ -11,12 +11,13 @@ export type TPageFlagHookArgs = {
 export type TPageFlagHookReturnType = {
   isMovePageEnabled: boolean;
   isPageSharingEnabled: boolean;
+  isNestedPagesEnabled: boolean;
 };
 
-export const usePageFlag = (args: TPageFlagHookArgs): TPageFlagHookReturnType => {
-  const {} = args;
+export const usePageFlag = (_args: TPageFlagHookArgs): TPageFlagHookReturnType => {
   return {
     isMovePageEnabled: false,
     isPageSharingEnabled: false,
+    isNestedPagesEnabled: true,
   };
 };

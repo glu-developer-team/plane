@@ -32,6 +32,10 @@ class PageSerializer(BaseSerializer):
     # Many to many
     label_ids = serializers.ListField(child=serializers.UUIDField(), required=False)
     project_ids = serializers.ListField(child=serializers.UUIDField(), required=False)
+    parent_id = serializers.PrimaryKeyRelatedField(
+        source="parent", queryset=Page.objects.all(), required=False, allow_null=True
+    )
+    sub_pages_count = serializers.IntegerField(read_only=True, required=False)
 
     class Meta:
         model = Page
@@ -42,7 +46,7 @@ class PageSerializer(BaseSerializer):
             "access",
             "color",
             "labels",
-            "parent",
+            "parent_id",
             "is_favorite",
             "is_locked",
             "archived_at",
@@ -55,6 +59,7 @@ class PageSerializer(BaseSerializer):
             "logo_props",
             "label_ids",
             "project_ids",
+            "sub_pages_count",
         ]
         read_only_fields = ["workspace", "owned_by"]
 
@@ -131,6 +136,31 @@ class PageDetailSerializer(PageSerializer):
 
     class Meta(PageSerializer.Meta):
         fields = PageSerializer.Meta.fields + ["description_html"]
+
+
+class PageLiteSerializer(BaseSerializer):
+    project_ids = serializers.ListField(child=serializers.UUIDField(), required=False)
+    parent_id = serializers.PrimaryKeyRelatedField(
+        source="parent", queryset=Page.objects.all(), required=False, allow_null=True
+    )
+    sub_pages_count = serializers.IntegerField(read_only=True, required=False)
+
+    class Meta:
+        model = Page
+        fields = [
+            "id",
+            "name",
+            "access",
+            "logo_props",
+            "is_locked",
+            "archived_at",
+            "parent_id",
+            "workspace",
+            "project_ids",
+            "sub_pages_count",
+            "owned_by",
+            "deleted_at",
+        ]
 
 
 class PageVersionSerializer(BaseSerializer):

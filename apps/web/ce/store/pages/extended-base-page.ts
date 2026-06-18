@@ -13,10 +13,19 @@ export type TExtendedPageInstance = TPageExtended & {
 };
 
 export class ExtendedBasePage implements TExtendedPageInstance {
+  parent_id: string | null | undefined;
+  sub_pages_count: number | undefined;
+
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  constructor(store: RootStore, page: TPage, services: TBasePageServices) {}
+  constructor(store: RootStore, page: TPage, services: TBasePageServices) {
+    this.parent_id = page?.parent_id ?? null;
+    this.sub_pages_count = page?.sub_pages_count;
+  }
 
   get asJSONExtended(): TExtendedPageInstance["asJSONExtended"] {
-    return {};
+    return {
+      parent_id: this.parent_id,
+      sub_pages_count: this.sub_pages_count,
+    };
   }
 }

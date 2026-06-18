@@ -4,4 +4,7 @@
  * See the LICENSE file for details.
  */
 
-export type TPageExtended = object;
+export type TPageExtended = {
+  parent_id?: string | null;
+  sub_pages_count?: number;
+};

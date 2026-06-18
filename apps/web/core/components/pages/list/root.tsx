@@ -4,6 +4,7 @@
  * See the LICENSE file for details.
  */
 
+import { useState } from "react";
 import { observer } from "mobx-react";
 // types
 import type { TPageNavigationTabs } from "@plane/types";
@@ -13,7 +14,7 @@ import { ListLayout } from "@/components/core/list";
 import type { EPageStoreType } from "@/plane-web/hooks/store";
 import { usePageStore } from "@/plane-web/hooks/store";
 // local imports
-import { PageListBlock } from "./block";
+import { PageListBlockRoot } from "./block-root";
 
 type TPagesListRoot = {
   pageType: TPageNavigationTabs;
@@ -22,16 +23,23 @@ type TPagesListRoot = {
 
 export const PagesListRoot = observer(function PagesListRoot(props: TPagesListRoot) {
   const { pageType, storeType } = props;
-  // store hooks
+  const [expandedPageIds, setExpandedPageIds] = useState<string[]>([]);
   const { getCurrentProjectFilteredPageIdsByTab } = usePageStore(storeType);
-  // derived values
   const filteredPageIds = getCurrentProjectFilteredPageIdsByTab(pageType);
 
   if (!filteredPageIds) return <></>;
   return (
     <ListLayout>
       {filteredPageIds.map((pageId) => (
-        <PageListBlock key={pageId} pageId={pageId} storeType={storeType} />
+        <PageListBlockRoot
+          key={pageId}
+          paddingLeft={0}
+          pageId={pageId}
+          storeType={storeType}
+          pageType={pageType}
+          expandedPageIds={expandedPageIds}
+          setExpandedPageIds={setExpandedPageIds}
+        />
       ))}
     </ListLayout>
   );

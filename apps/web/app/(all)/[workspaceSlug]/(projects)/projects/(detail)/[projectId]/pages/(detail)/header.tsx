@@ -4,10 +4,14 @@
  * See the LICENSE file for details.
  */
 
+import { useEffect } from "react";
 import { observer } from "mobx-react";
 import { useParams } from "next/navigation";
+import { Plus } from "lucide-react";
 // plane imports
+import { EPageAccess } from "@plane/constants";
 import { PageIcon } from "@plane/propel/icons";
+import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import type { ICustomSearchSelectOption } from "@plane/types";
 import { Breadcrumbs, Header, BreadcrumbNavigationSearchDropdown } from "@plane/ui";
 import { getPageName } from "@plane/utils";
@@ -32,18 +36,23 @@ export interface IPagesHeaderProps {
 const storeType = EPageStoreType.PROJECT;
 
 export const PageDetailsHeader = observer(function PageDetailsHeader() {
-  // router
   const router = useAppRouter();
   const { workspaceSlug, pageId, projectId } = useParams();
-  // store hooks
   const { loader } = useProject();
-  const { getPageById, getCurrentProjectPageIds } = usePageStore(storeType);
+  const { getPageById, getCurrentProjectPageIds, fetchParentPages, createPage, getOrderedParentPages } =
+    usePageStore(storeType);
   const page = usePage({
     pageId: pageId?.toString() ?? "",
     storeType,
   });
-  // derived values
+
+  useEffect(() => {
+    if (!workspaceSlug || !projectId || !pageId || !page?.parent_id) return;
+    fetchParentPages(workspaceSlug.toString(), projectId.toString(), pageId.toString());
+  }, [workspaceSlug, projectId, pageId, page?.parent_id, fetchParentPages]);
+
   const projectPageIds = getCurrentProjectPageIds(projectId?.toString());
+  const parentPages = pageId ? getOrderedParentPages(pageId.toString()) : undefined;
 
   const switcherOptions = projectPageIds
     .map((id) => {
@@ -62,6 +71,26 @@ export const PageDetailsHeader = observer(function PageDetailsHeader() {
     })
     .filter((option) => option !== undefined) as ICustomSearchSelectOption[];
 
+  const handleCreateSubPage = async () => {
+    if (!workspaceSlug || !projectId || !page) return;
+    try {
+      const newPage = await createPage({
+        parent_id: page.id,
+        access: page.access ?? EPageAccess.PUBLIC,
+      });
+      if (newPage?.id) {
+        router.push(`/${workspaceSlug}/projects/${projectId}/pages/${newPage.id}`);
+      }
+    } catch (err: unknown) {
+      const error = err as { error?: string };
+      setToast({
+        type: TOAST_TYPE.ERROR,
+        title: "Error!",
+        message: error?.error || "Sub-page could not be created. Please try again.",
+      });
+    }
+  };
+
   if (!page) return null;
 
   return (
@@ -79,7 +108,18 @@ export const PageDetailsHeader = observer(function PageDetailsHeader() {
                 />
               }
             />
-
+            {parentPages?.map((parentPage) => (
+              <Breadcrumbs.Item
+                key={parentPage.id}
+                component={
+                  <BreadcrumbLink
+                    label={getPageName(parentPage.name)}
+                    href={`/${workspaceSlug}/projects/${projectId}/pages/${parentPage.id}`}
+                    icon={<PageIcon className="h-4 w-4 text-tertiary" />}
+                  />
+                }
+              />
+            ))}
             <Breadcrumbs.Item
               component={
                 <BreadcrumbNavigationSearchDropdown
@@ -102,6 +142,16 @@ export const PageDetailsHeader = observer(function PageDetailsHeader() {
         </div>
       </Header.LeftItem>
       <Header.RightItem>
+        {page.canCurrentUserEditPage && page.isContentEditable && (
+          <button
+            type="button"
+            onClick={handleCreateSubPage}
+            className="grid size-7 place-items-center rounded-md text-secondary transition-colors hover:bg-layer-transparent-hover hover:text-primary"
+            title="Add sub-page"
+          >
+            <Plus className="size-4" />
+          </button>
+        )}
         <PageSyncingBadge syncStatus={page.isSyncingWithServer} />
         <PageDetailsHeaderExtraActions page={page} storeType={storeType} />
         <PageHeaderActions page={page} storeType={storeType} />

@@ -19,6 +19,7 @@ from django.db.models import (
     Case,
     When,
     IntegerField,
+    Subquery,
 )
 from django.http import StreamingHttpResponse
 from django.contrib.postgres.aggregates import ArrayAgg
@@ -34,6 +35,7 @@ from plane.app.permissions import allow_permission, ROLE
 from plane.app.serializers import (
     PageSerializer,
     PageDetailSerializer,
+    PageLiteSerializer,
     PageBinaryUpdateSerializer,
 )
 from plane.db.models import (
@@ -54,10 +56,10 @@ from plane.bgtasks.page_version_task import track_page_version
 from plane.bgtasks.recent_visited_task import recent_visited_task
 from plane.bgtasks.copy_s3_object import copy_s3_objects_of_description_and_assets
 from plane.app.permissions import ProjectPagePermission
+from plane.utils.page_hierarchy import get_all_parent_ids
 
 
 def unarchive_archive_page_and_descendants(page_id, archived_at):
-    # Your SQL query
     sql = """
     WITH RECURSIVE descendants AS (
         SELECT id FROM pages WHERE id = %s
@@ -78,6 +80,16 @@ class PageViewSet(BaseViewSet):
     permission_classes = [ProjectPagePermission]
     search_fields = ["name"]
 
+    def _sub_pages_count_subquery(self):
+        return (
+            Page.objects.filter(parent=OuterRef("id"))
+            .filter(archived_at__isnull=True)
+            .order_by()
+            .values("parent")
+            .annotate(count=Count("id"))
+            .values("count")[:1]
+        )
+
     def get_queryset(self):
         subquery = UserFavorite.objects.filter(
             user=self.request.user,
@@ -94,7 +106,6 @@ class PageViewSet(BaseViewSet):
                 projects__project_projectmember__is_active=True,
                 projects__archived_at__isnull=True,
             )
-            .filter(parent__isnull=True)
             .filter(Q(owned_by=self.request.user) | Q(access=0))
             .prefetch_related("projects")
             .select_related("workspace")
@@ -163,7 +174,7 @@ class PageViewSet(BaseViewSet):
             if page.is_locked:
                 return Response({"error": "Page is locked"}, status=status.HTTP_400_BAD_REQUEST)
 
-            parent = request.data.get("parent", None)
+            parent = request.data.get("parent_id", None)
             if parent:
                 _ = Page.objects.get(
                     pk=parent,
@@ -289,7 +300,11 @@ class PageViewSet(BaseViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def list(self, request, slug, project_id):
-        queryset = self.get_queryset()
+        queryset = (
+            self.get_queryset()
+            .annotate(sub_pages_count=Subquery(self._sub_pages_count_subquery()))
+            .filter(parent__isnull=True)
+        )
         project = Project.objects.get(pk=project_id)
         if (
             ProjectMember.objects.filter(
@@ -304,6 +319,59 @@ class PageViewSet(BaseViewSet):
             queryset = queryset.filter(owned_by=request.user)
         pages = PageSerializer(queryset, many=True).data
         return Response(pages, status=status.HTTP_200_OK)
+
+    def sub_pages(self, request, slug, project_id, page_id):
+        sub_pages_count_subquery = (
+            Page.objects.filter(parent=OuterRef("id"))
+            .filter(archived_at__isnull=True)
+            .order_by()
+            .values("parent")
+            .annotate(count=Count("id"))
+            .values("count")[:1]
+        )
+        pages = (
+            Page.objects.filter(
+                workspace__slug=slug,
+                projects__id=project_id,
+                parent_id=page_id,
+                project_pages__deleted_at__isnull=True,
+            )
+            .filter(Q(owned_by=request.user) | Q(access=0))
+            .annotate(
+                project_ids=Coalesce(
+                    ArrayAgg(
+                        "projects__id",
+                        distinct=True,
+                        filter=~Q(projects__id=True),
+                    ),
+                    Value([], output_field=ArrayField(UUIDField())),
+                )
+            )
+            .annotate(sub_pages_count=Subquery(sub_pages_count_subquery))
+        )
+        serializer = PageLiteSerializer(pages, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def parent_pages(self, request, slug, project_id, page_id):
+        page_ids = [pid for pid in get_all_parent_ids(page_id) if pid != str(page_id)]
+        if not page_ids:
+            return Response([], status=status.HTTP_200_OK)
+
+        pages = Page.objects.filter(
+            workspace__slug=slug,
+            projects__id=project_id,
+            id__in=page_ids,
+            project_pages__deleted_at__isnull=True,
+        ).annotate(
+            project_ids=Coalesce(
+                ArrayAgg("projects__id", distinct=True, filter=~Q(projects__id=True)),
+                Value([], output_field=ArrayField(UUIDField())),
+            )
+        )
+        pages_by_id = {str(page.id): page for page in pages}
+        ordered_pages = [pages_by_id[page_id] for page_id in page_ids if page_id in pages_by_id]
+        serializer = PageLiteSerializer(ordered_pages, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def archive(self, request, slug, project_id, page_id):
         page = Page.objects.get(

@@ -24,6 +24,13 @@ type Props = {
   source: string;
 };
 
+function decodeHtmlEntities(text: string): string {
+  if (!text.includes("&")) return text;
+  const textarea = document.createElement("textarea");
+  textarea.innerHTML = text;
+  return textarea.value;
+}
+
 export function MermaidDiagram({ source }: Props) {
   const reactId = useId();
   const renderId = `mermaid-${reactId.replace(/:/g, "")}`;
@@ -31,7 +38,7 @@ export function MermaidDiagram({ source }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const trimmed = source.trim();
+    const trimmed = decodeHtmlEntities(source).trim();
     if (!trimmed) {
       setSvg("");
       setError(null);

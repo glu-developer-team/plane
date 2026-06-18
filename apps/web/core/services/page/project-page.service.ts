@@ -12,6 +12,13 @@ import type { TDocumentPayload, TPage } from "@plane/types";
 import { APIService } from "@/services/api.service";
 import { FileUploadService } from "@/services/file-upload.service";
 
+type TPageApiResponse = TPage & { parent?: string | null };
+
+const normalizePage = (page: TPageApiResponse): TPage => ({
+  ...page,
+  parent_id: page.parent_id ?? page.parent ?? null,
+});
+
 export class ProjectPageService extends APIService {
   private fileUploadService: FileUploadService;
 
@@ -23,7 +30,7 @@ export class ProjectPageService extends APIService {
 
   async fetchAll(workspaceSlug: string, projectId: string): Promise<TPage[]> {
     return this.get(`/api/workspaces/${workspaceSlug}/projects/${projectId}/pages/`)
-      .then((response) => response?.data)
+      .then((response) => (response?.data ?? []).map(normalizePage))
       .catch((error) => {
         throw error?.response?.data;
       });
@@ -35,7 +42,7 @@ export class ProjectPageService extends APIService {
         track_visit: trackVisit,
       },
     })
-      .then((response) => response?.data)
+      .then((response) => normalizePage(response?.data))
       .catch((error) => {
         throw error?.response?.data;
       });
@@ -43,7 +50,7 @@ export class ProjectPageService extends APIService {
 
   async create(workspaceSlug: string, projectId: string, data: Partial<TPage>): Promise<TPage> {
     return this.post(`/api/workspaces/${workspaceSlug}/projects/${projectId}/pages/`, data)
-      .then((response) => response?.data)
+      .then((response) => normalizePage(response?.data))
       .catch((error) => {
         throw error?.response?.data;
       });
@@ -51,7 +58,7 @@ export class ProjectPageService extends APIService {
 
   async update(workspaceSlug: string, projectId: string, pageId: string, data: Partial<TPage>): Promise<TPage> {
     return this.patch(`/api/workspaces/${workspaceSlug}/projects/${projectId}/pages/${pageId}/`, data)
-      .then((response) => response?.data)
+      .then((response) => normalizePage(response?.data))
       .catch((error) => {
         throw error?.response?.data;
       });
@@ -176,7 +183,23 @@ export class ProjectPageService extends APIService {
 
   async duplicate(workspaceSlug: string, projectId: string, pageId: string): Promise<TPage> {
     return this.post(`/api/workspaces/${workspaceSlug}/projects/${projectId}/pages/${pageId}/duplicate/`)
-      .then((response) => response?.data)
+      .then((response) => normalizePage(response?.data))
+      .catch((error) => {
+        throw error?.response?.data;
+      });
+  }
+
+  async fetchSubPages(workspaceSlug: string, projectId: string, pageId: string): Promise<TPage[]> {
+    return this.get(`/api/workspaces/${workspaceSlug}/projects/${projectId}/pages/${pageId}/sub-pages/`)
+      .then((response) => (response?.data ?? []).map(normalizePage))
+      .catch((error) => {
+        throw error?.response?.data;
+      });
+  }
+
+  async fetchParentPages(workspaceSlug: string, projectId: string, pageId: string): Promise<TPage[]> {
+    return this.get(`/api/workspaces/${workspaceSlug}/projects/${projectId}/pages/${pageId}/parent-pages/`)
+      .then((response) => (response?.data ?? []).map(normalizePage))
       .catch((error) => {
         throw error?.response?.data;
       });

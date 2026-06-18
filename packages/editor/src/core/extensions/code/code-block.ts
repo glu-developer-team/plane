@@ -8,6 +8,7 @@ import { mergeAttributes, Node, textblockTypeInputRule } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 // constants
 import { CORE_EXTENSIONS } from "@/constants/extension";
+import { extractMermaidFromPaste, normalizePastedPlainText } from "./utils/mermaid-paste";
 
 export type CodeBlockOptions = {
   /**
@@ -263,7 +264,17 @@ export const CodeBlock = Node.create<CodeBlockOptions>({
               }
 
               if (this.editor.isActive(this.type.name)) {
-                return false;
+                event.preventDefault();
+                const text = normalizePastedPlainText(event.clipboardData.getData("text/plain"));
+                if (!text) {
+                  return false;
+                }
+
+                const { tr } = view.state;
+                const { from, to } = tr.selection;
+                tr.insertText(text, from, to);
+                view.dispatch(tr);
+                return true;
               }
 
               if (this.editor.isActive(CORE_EXTENSIONS.CODE_INLINE)) {
@@ -338,8 +349,25 @@ export const CodeBlock = Node.create<CodeBlockOptions>({
 
                 return false;
               } else {
-                // TODO: complicated paste logic, to be handled later
-                return false;
+                const mermaidSource = extractMermaidFromPaste(text);
+                if (!mermaidSource) {
+                  return false;
+                }
+
+                const { tr } = view.state;
+                const { $from } = tr.selection;
+                const isCurrentLineEmpty = !$from.parent.textContent.trim();
+                const insertPos = isCurrentLineEmpty ? $from.pos - 1 : $from.end($from.depth) + 1;
+
+                if (insertPos < 0 || insertPos > tr.doc.content.size) {
+                  return false;
+                }
+
+                const textNode = view.state.schema.text(mermaidSource);
+                const codeBlock = this.type.create({ language: "mermaid" }, textNode);
+                tr.insert(insertPos, codeBlock);
+                view.dispatch(tr);
+                return true;
               }
             } catch (error) {
               console.error("Error handling paste in CodeBlock extension:", error);

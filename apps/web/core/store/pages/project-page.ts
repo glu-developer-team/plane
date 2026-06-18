@@ -4,13 +4,16 @@
  * See the LICENSE file for details.
  */
 
-import { computed, makeObservable } from "mobx";
+import { computed, makeObservable, action, runInAction } from "mobx";
 import { computedFn } from "mobx-utils";
+import { set } from "lodash-es";
 // constants
 import { EPageAccess, EUserPermissions } from "@plane/constants";
 import type { TPage } from "@plane/types";
 // plane web store
 import type { RootStore } from "@/plane-web/store/root.store";
+// helpers
+import { getPageName } from "@plane/utils";
 // services
 import { ProjectPageService } from "@/services/page";
 const projectPageService = new ProjectPageService();
@@ -62,6 +65,8 @@ export class ProjectPage extends BasePage implements TProjectPage {
     });
     makeObservable(this, {
       // computed
+      subPageIds: computed,
+      parentPageIds: computed,
       canCurrentUserAccessPage: computed,
       canCurrentUserEditPage: computed,
       canCurrentUserDuplicatePage: computed,
@@ -72,8 +77,56 @@ export class ProjectPage extends BasePage implements TProjectPage {
       canCurrentUserFavoritePage: computed,
       canCurrentUserMovePage: computed,
       isContentEditable: computed,
+      // actions
+      fetchSubPages: action,
     });
   }
+
+  get parentPageIds() {
+    const immediateParent = this.parent_id;
+    if (!immediateParent) return [];
+    const parentPageIds = [immediateParent];
+    let parent = this.rootStore.projectPages.getPageById(immediateParent);
+    while (parent?.parent_id) {
+      parentPageIds.push(parent.parent_id);
+      parent = this.rootStore.projectPages.getPageById(parent.parent_id);
+    }
+    return parentPageIds.filter((id): id is string => id !== undefined);
+  }
+
+  get subPageIds() {
+    const pages = Object.values(this.rootStore.projectPages.data);
+    const filteredPages = pages.filter((page) => page.parent_id === this.id && !page.deleted_at);
+    const sortedPages = filteredPages.toSorted((a, b) =>
+      getPageName(a.name).toLowerCase().localeCompare(getPageName(b.name).toLowerCase())
+    );
+    return sortedPages.map((page) => page.id).filter((id): id is string => id !== undefined);
+  }
+
+  fetchSubPages = async () => {
+    try {
+      const { workspaceSlug } = this.rootStore.router ?? {};
+      const projectId = this.project_ids?.[0];
+      if (!workspaceSlug || !projectId || !this.id) throw new Error("Required fields not found");
+      const subPages = await projectPageService.fetchSubPages(workspaceSlug, projectId, this.id);
+
+      runInAction(() => {
+        for (const page of subPages) {
+          if (page?.id) {
+            const pageInstance = this.rootStore.projectPages.getPageById(page.id);
+            if (pageInstance) {
+              pageInstance.mutateProperties(page);
+            } else {
+              set(this.rootStore.projectPages.data, [page.id], new ProjectPage(this.rootStore, page));
+            }
+          }
+        }
+      });
+    } catch (error) {
+      console.error("Error in fetching sub-pages", error);
+      throw error;
+    }
+  };
 
   private getHighestRoleAcrossProjects = computedFn((): EUserPermissions | undefined => {
     const { workspaceSlug } = this.rootStore.router;
