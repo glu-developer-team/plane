@@ -341,6 +341,11 @@ export const coreRoutes: RouteConfigEntry[] = [
                 "./(all)/[workspaceSlug]/(settings)/settings/projects/[projectId]/automations/page.tsx"
               ),
             ]),
+            // Project Backlog integration
+            route(
+              ":workspaceSlug/settings/projects/:projectId/integrations/backlog",
+              "./(all)/[workspaceSlug]/(settings)/settings/projects/[projectId]/integrations/backlog/page.tsx"
+            ),
           ]),
         ]),
       ]),

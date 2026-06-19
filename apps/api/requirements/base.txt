@@ -48,6 +48,8 @@ openpyxl==3.1.2
 python-json-logger==4.0.0
 # html parser
 beautifulsoup4==4.12.3
+# html to markdown (Backlog sync push)
+markdownify==0.13.1
 # analytics
 posthog==3.5.0
 # crypto

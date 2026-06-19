@@ -10,3 +10,10 @@ from .github import (
     GithubCommentSync,
 )
 from .slack import SlackProjectSync
+from .backlog import (
+    BacklogProjectSync,
+    BacklogIssueSync,
+    BacklogCommentSync,
+    BacklogActivitySync,
+    BacklogSyncJob,
+)

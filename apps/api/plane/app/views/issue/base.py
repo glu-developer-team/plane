@@ -44,6 +44,7 @@ from plane.bgtasks.issue_activities_task import issue_activity
 from plane.bgtasks.issue_description_version_task import issue_description_version_task
 from plane.bgtasks.recent_visited_task import recent_visited_task
 from plane.bgtasks.webhook_task import model_activity
+from plane.utils.backlog.sync import enqueue_backlog_push_issue
 from plane.db.models import (
     CycleIssue,
     FileAsset,
@@ -473,6 +474,8 @@ class IssueViewSet(BaseViewSet):
                 user_id=request.user.id,
                 is_creating=True,
             )
+            if not issue.get("is_draft"):
+                enqueue_backlog_push_issue(str(serializer.data["id"]), action="create")
             return Response(issue, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -697,6 +700,8 @@ class IssueViewSet(BaseViewSet):
                     issue_id=str(serializer.data.get("id", None)),
                     user_id=request.user.id,
                 )
+            if not issue.is_draft:
+                enqueue_backlog_push_issue(str(pk), action="update")
             return Response(status=status.HTTP_204_NO_CONTENT)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

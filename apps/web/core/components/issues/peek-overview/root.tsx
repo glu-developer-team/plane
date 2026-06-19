@@ -23,6 +23,7 @@ import { useWorkItemProperties } from "@/plane-web/hooks/use-issue-properties";
 // local imports
 import type { TIssueOperations } from "../issue-detail";
 import { IssueView } from "./view";
+import { BacklogIssueSyncBridge } from "@/components/integration/backlog/sync-bridge";
 
 export const IssuePeekOverview = observer(function IssuePeekOverview(props: IWorkItemPeekOverview) {
   const {
@@ -70,9 +71,9 @@ export const IssuePeekOverview = observer(function IssuePeekOverview(props: IWor
         try {
           setError(false);
           await fetchIssue(workspaceSlug, projectId, issueId);
-        } catch (error) {
+        } catch (fetchError) {
           setError(true);
-          console.error("Error fetching the parent issue", error);
+          console.error("Error fetching the parent issue", fetchError);
         }
       },
       update: async (workspaceSlug: string, projectId: string, issueId: string, data: Partial<TIssue>) => {
@@ -110,8 +111,8 @@ export const IssuePeekOverview = observer(function IssuePeekOverview(props: IWor
         try {
           if (!issues?.archiveIssue) return;
           await issues.archiveIssue(workspaceSlug, projectId, issueId);
-        } catch (error) {
-          console.error("Error archiving the issue", error);
+        } catch (archiveError) {
+          console.error("Error archiving the issue", archiveError);
         }
       },
       restore: async (workspaceSlug: string, projectId: string, issueId: string) => {
@@ -169,8 +170,8 @@ export const IssuePeekOverview = observer(function IssuePeekOverview(props: IWor
           });
           await removeFromCyclePromise;
           fetchActivities(workspaceSlug, projectId, issueId);
-        } catch (error) {
-          console.error("Error removing issue from cycle", error);
+        } catch (cycleRemoveError) {
+          console.error("Error removing issue from cycle", cycleRemoveError);
         }
       },
       changeModulesInIssue: async (
@@ -206,8 +207,8 @@ export const IssuePeekOverview = observer(function IssuePeekOverview(props: IWor
           });
           await removeFromModulePromise;
           fetchActivities(workspaceSlug, projectId, issueId);
-        } catch (error) {
-          console.error("Error removing issue from module", error);
+        } catch (moduleRemoveError) {
+          console.error("Error removing issue from module", moduleRemoveError);
         }
       },
     }),
@@ -236,17 +237,24 @@ export const IssuePeekOverview = observer(function IssuePeekOverview(props: IWor
   );
 
   return (
-    <IssueView
-      workspaceSlug={peekIssue.workspaceSlug}
-      projectId={peekIssue.projectId}
-      issueId={peekIssue.issueId}
-      isLoading={isLoading}
-      isError={error}
-      is_archived={!!peekIssue.isArchived}
-      disabled={!isEditable}
-      embedIssue={embedIssue}
-      embedRemoveCurrentNotification={embedRemoveCurrentNotification}
-      issueOperations={issueOperations}
-    />
+    <>
+      <BacklogIssueSyncBridge
+        workspaceSlug={peekIssue.workspaceSlug}
+        projectId={peekIssue.projectId}
+        issueId={peekIssue.issueId}
+      />
+      <IssueView
+        workspaceSlug={peekIssue.workspaceSlug}
+        projectId={peekIssue.projectId}
+        issueId={peekIssue.issueId}
+        isLoading={isLoading}
+        isError={error}
+        is_archived={!!peekIssue.isArchived}
+        disabled={!isEditable}
+        embedIssue={embedIssue}
+        embedRemoveCurrentNotification={embedRemoveCurrentNotification}
+        issueOperations={issueOperations}
+      />
+    </>
   );
 });

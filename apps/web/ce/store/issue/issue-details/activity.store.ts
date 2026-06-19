@@ -34,6 +34,12 @@ export interface IIssueActivityStoreActions {
     issueId: string,
     loaderType?: TActivityLoader
   ) => Promise<TIssueActivity[]>;
+  refetchActivities: (
+    workspaceSlug: string,
+    projectId: string,
+    issueId: string,
+    loaderType?: TActivityLoader
+  ) => Promise<TIssueActivity[]>;
 }
 
 export interface IIssueActivityStore extends IIssueActivityStoreActions {
@@ -67,6 +73,7 @@ export class IssueActivityStore implements IIssueActivityStore {
       activityMap: observable,
       // actions
       fetchActivities: action,
+      refetchActivities: action,
     });
     this.serviceType = serviceType;
     // services
@@ -160,9 +167,9 @@ export class IssueActivityStore implements IIssueActivityStore {
       const activityIds = activities.map((activity) => activity.id);
 
       runInAction(() => {
-        update(this.activities, issueId, (currentActivityIds) => {
-          if (!currentActivityIds) return activityIds;
-          return uniq(concat(currentActivityIds, activityIds));
+        update(this.activities, issueId, (existingActivityIds) => {
+          if (!existingActivityIds) return activityIds;
+          return uniq(concat(existingActivityIds, activityIds));
         });
         activities.forEach((activity) => {
           set(this.activityMap, activity.id, activity);
@@ -175,5 +182,17 @@ export class IssueActivityStore implements IIssueActivityStore {
       this.loader = undefined;
       throw error;
     }
+  }
+
+  public async refetchActivities(
+    workspaceSlug: string,
+    projectId: string,
+    issueId: string,
+    loaderType: TActivityLoader = "fetch"
+  ) {
+    runInAction(() => {
+      set(this.activities, issueId, []);
+    });
+    return this.fetchActivities(workspaceSlug, projectId, issueId, loaderType);
   }
 }

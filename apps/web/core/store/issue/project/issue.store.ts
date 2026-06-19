@@ -36,6 +36,10 @@ export interface IProjectIssues extends IBaseIssuesStore {
     projectId: string,
     loadType: TLoader
   ) => Promise<TIssuesResponse | undefined>;
+  silentRefetchIssuesWithExistingPagination: (
+    workspaceSlug: string,
+    projectId: string
+  ) => Promise<TIssuesResponse | undefined>;
   fetchNextIssues: (
     workspaceSlug: string,
     projectId: string,
@@ -69,6 +73,7 @@ export class ProjectIssues extends BaseIssuesStore implements IProjectIssues {
       fetchIssues: action,
       fetchNextIssues: action,
       fetchIssuesWithExistingPagination: action,
+      silentRefetchIssuesWithExistingPagination: action,
 
       quickAddIssue: action,
     });
@@ -83,7 +88,9 @@ export class ProjectIssues extends BaseIssuesStore implements IProjectIssues {
    * @param projectId
    */
   fetchParentStats = async (workspaceSlug: string, projectId?: string) => {
-    projectId && this.rootIssueStore.rootStore.projectRoot.project.fetchProjectDetails(workspaceSlug, projectId);
+    if (projectId) {
+      await this.rootIssueStore.rootStore.projectRoot.project.fetchProjectDetails(workspaceSlug, projectId);
+    }
   };
 
   /** */
@@ -182,6 +189,37 @@ export class ProjectIssues extends BaseIssuesStore implements IProjectIssues {
   ) => {
     if (!this.paginationOptions) return;
     return await this.fetchIssues(workspaceSlug, projectId, loadType, this.paginationOptions, true);
+  };
+
+  /**
+   * Refetch the current issue page without clearing the list or showing mutation loaders.
+   */
+  silentRefetchIssuesWithExistingPagination = async (workspaceSlug: string, projectId: string) => {
+    if (!this.paginationOptions) return;
+
+    const params = this.issueFilterStore?.getFilterParams(
+      this.paginationOptions,
+      projectId,
+      undefined,
+      undefined,
+      undefined
+    );
+    const response = await this.issueService.getIssues(workspaceSlug, projectId, params, {
+      signal: this.controller.signal,
+    });
+    const { issueList, groupedIssues, groupedIssueCount } = this.processIssueResponse(response);
+
+    this.rootIssueStore.issues.addIssue(issueList);
+
+    runInAction(() => {
+      this.updateGroupedIssueIds(groupedIssues, groupedIssueCount);
+    });
+
+    this.rootIssueStore.issueDetail.relation.extractRelationsFromIssues(issueList);
+    this.storePreviousPaginationValues(response, this.paginationOptions);
+    await this.fetchParentStats(workspaceSlug, projectId);
+
+    return response;
   };
 
   /**

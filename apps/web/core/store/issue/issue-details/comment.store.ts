@@ -22,6 +22,12 @@ export interface IIssueCommentStoreActions {
     issueId: string,
     loaderType?: TCommentLoader
   ) => Promise<TIssueComment[]>;
+  refetchComments: (
+    workspaceSlug: string,
+    projectId: string,
+    issueId: string,
+    loaderType?: TCommentLoader
+  ) => Promise<TIssueComment[]>;
   createComment: (
     workspaceSlug: string,
     projectId: string,
@@ -67,6 +73,7 @@ export class IssueCommentStore implements IIssueCommentStore {
       commentMap: observable,
       // actions
       fetchComments: action,
+      refetchComments: action,
       createComment: action,
       updateComment: action,
       removeComment: action,
@@ -108,9 +115,9 @@ export class IssueCommentStore implements IIssueCommentStore {
 
     const commentIds = comments.map((comment) => comment.id);
     runInAction(() => {
-      update(this.comments, issueId, (_commentIds) => {
-        if (!_commentIds) return commentIds;
-        return uniq(concat(_commentIds, commentIds));
+      update(this.comments, issueId, (existingCommentIds) => {
+        if (!existingCommentIds) return commentIds;
+        return uniq(concat(existingCommentIds, commentIds));
       });
       comments.forEach((comment) => {
         this.rootIssueDetail.commentReaction.applyCommentReactions(comment.id, comment?.comment_reactions || []);
@@ -120,6 +127,18 @@ export class IssueCommentStore implements IIssueCommentStore {
     });
 
     return comments;
+  };
+
+  refetchComments = async (
+    workspaceSlug: string,
+    projectId: string,
+    issueId: string,
+    loaderType: TCommentLoader = "fetch"
+  ) => {
+    runInAction(() => {
+      set(this.comments, issueId, []);
+    });
+    return this.fetchComments(workspaceSlug, projectId, issueId, loaderType);
   };
 
   createComment = async (workspaceSlug: string, projectId: string, issueId: string, data: Partial<TIssueComment>) => {

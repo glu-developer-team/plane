@@ -27,6 +27,11 @@ from .integration import (
     Integration,
     SlackProjectSync,
     WorkspaceIntegration,
+    BacklogProjectSync,
+    BacklogIssueSync,
+    BacklogCommentSync,
+    BacklogActivitySync,
+    BacklogSyncJob,
 )
 from .issue import (
     CommentReaction,

@@ -29,6 +29,7 @@ import { ProjectAuthWrapper } from "@/layouts/auth-layout/project-wrapper";
 // plane web imports
 import { useWorkItemProperties } from "@/plane-web/hooks/use-issue-properties";
 import { WorkItemDetailRoot } from "@/plane-web/components/browse/workItem-detail";
+import { BacklogIssueSyncBridge } from "@/components/integration/backlog/sync-bridge";
 
 import type { Route } from "./+types/page";
 
@@ -129,6 +130,11 @@ export const IssueDetailsPage = observer(function IssueDetailsPage({ params }: R
       <PageHead title={pageTitle} />
       {workspaceSlug && projectId && issueId && (
         <ProjectAuthWrapper workspaceSlug={workspaceSlug} projectId={projectId}>
+          <BacklogIssueSyncBridge
+            workspaceSlug={workspaceSlug.toString()}
+            projectId={projectId.toString()}
+            issueId={issueId.toString()}
+          />
           <WorkItemDetailRoot
             workspaceSlug={workspaceSlug.toString()}
             projectId={projectId.toString()}

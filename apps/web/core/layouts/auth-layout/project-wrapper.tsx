@@ -37,6 +37,7 @@ import { useProjectState } from "@/hooks/store/use-project-state";
 import { useProjectView } from "@/hooks/store/use-project-view";
 import { useUser, useUserPermissions } from "@/hooks/store/user";
 import { useTimeLineChart } from "@/hooks/use-timeline-chart";
+import { BacklogProjectSyncBridge } from "@/components/integration/backlog/sync-bridge";
 
 interface IProjectAuthWrapper {
   workspaceSlug: string;
@@ -157,5 +158,10 @@ export const ProjectAuthWrapper = observer(function ProjectAuthWrapper(props: IP
     );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      <BacklogProjectSyncBridge workspaceSlug={workspaceSlug} projectId={projectId} />
+      {children}
+    </>
+  );
 });

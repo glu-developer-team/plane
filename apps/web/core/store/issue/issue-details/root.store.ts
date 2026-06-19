@@ -259,8 +259,8 @@ export abstract class IssueDetail implements IIssueDetail {
     this.openWidgets = state;
     if (this.lastWidgetAction) this.lastWidgetAction = null;
   };
-  setLastWidgetAction = (action: TWorkItemWidgets) => {
-    this.openWidgets = [action];
+  setLastWidgetAction = (widgetAction: TWorkItemWidgets) => {
+    this.openWidgets = [widgetAction];
   };
   toggleOpenWidget = (state: TWorkItemWidgets) => {
     if (this.openWidgets && this.openWidgets.includes(state))
@@ -387,10 +387,14 @@ export abstract class IssueDetail implements IIssueDetail {
   // activity
   fetchActivities = async (workspaceSlug: string, projectId: string, issueId: string, loaderType?: TActivityLoader) =>
     this.activity.fetchActivities(workspaceSlug, projectId, issueId, loaderType);
+  refetchActivities = async (workspaceSlug: string, projectId: string, issueId: string, loaderType?: TActivityLoader) =>
+    this.activity.refetchActivities(workspaceSlug, projectId, issueId, loaderType);
 
   // comment
   fetchComments = async (workspaceSlug: string, projectId: string, issueId: string, loaderType?: TCommentLoader) =>
     this.comment.fetchComments(workspaceSlug, projectId, issueId, loaderType);
+  refetchComments = async (workspaceSlug: string, projectId: string, issueId: string, loaderType?: TCommentLoader) =>
+    this.comment.refetchComments(workspaceSlug, projectId, issueId, loaderType);
   createComment = async (workspaceSlug: string, projectId: string, issueId: string, data: Partial<TIssueComment>) =>
     this.comment.createComment(workspaceSlug, projectId, issueId, data);
   updateComment = async (
