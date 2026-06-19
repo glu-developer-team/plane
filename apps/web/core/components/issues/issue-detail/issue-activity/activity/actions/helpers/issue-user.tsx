@@ -6,7 +6,7 @@
 
 import Link from "next/link";
 // hooks
-import { useIssueDetail } from "@/hooks/store/use-issue-detail";
+import { useActiveIssueDetail } from "@/hooks/store/use-issue-detail";
 
 type TIssueUser = {
   activityId: string;
@@ -18,7 +18,7 @@ export function IssueUser(props: TIssueUser) {
   // hooks
   const {
     activity: { getActivityById },
-  } = useIssueDetail();
+  } = useActiveIssueDetail();
 
   const activity = getActivityById(activityId);
 

@@ -8,7 +8,7 @@ import { observer } from "mobx-react";
 import { RotateCcw } from "lucide-react";
 // hooks
 import { ArchiveIcon } from "@plane/propel/icons";
-import { useIssueDetail } from "@/hooks/store/use-issue-detail";
+import { useActiveIssueDetail } from "@/hooks/store/use-issue-detail";
 // components
 import { IssueActivityBlockComponent } from "./";
 // ui
@@ -20,7 +20,7 @@ export const IssueArchivedAtActivity = observer(function IssueArchivedAtActivity
   // hooks
   const {
     activity: { getActivityById },
-  } = useIssueDetail();
+  } = useActiveIssueDetail();
 
   const activity = getActivityById(activityId);
 

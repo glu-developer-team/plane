@@ -8,7 +8,7 @@ import { observer } from "mobx-react";
 import { CalendarDays } from "lucide-react";
 // hooks
 import { renderFormattedDate } from "@plane/utils";
-import { useIssueDetail } from "@/hooks/store/use-issue-detail";
+import { useActiveIssueDetail } from "@/hooks/store/use-issue-detail";
 // components
 import { IssueActivityBlockComponent, IssueLink } from "./";
 // helpers
@@ -20,7 +20,7 @@ export const IssueStartDateActivity = observer(function IssueStartDateActivity(p
   // hooks
   const {
     activity: { getActivityById },
-  } = useIssueDetail();
+  } = useActiveIssueDetail();
 
   const activity = getActivityById(activityId);
 

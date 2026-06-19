@@ -11,7 +11,7 @@ import { EFileAssetType } from "@plane/types";
 import type { TCommentsOperations } from "@plane/types";
 import { copyUrlToClipboard, formatTextList, generateWorkItemLink } from "@plane/utils";
 import { useEditorAsset } from "@/hooks/store/use-editor-asset";
-import { useIssueDetail } from "@/hooks/store/use-issue-detail";
+import { useWorkItemIssueDetail } from "@/hooks/store/use-issue-detail";
 import { useMember } from "@/hooks/store/use-member";
 import { useProject } from "@/hooks/store/use-project";
 import { useUser } from "@/hooks/store/user";
@@ -30,7 +30,7 @@ export const useWorkItemCommentOperations = (
     createCommentReaction,
     removeCommentReaction,
     issue: { getIssueById },
-  } = useIssueDetail();
+  } = useWorkItemIssueDetail(issueId);
   const { getProjectById } = useProject();
   const { getUserDetails } = useMember();
   const { uploadEditorAsset, duplicateEditorAsset } = useEditorAsset();
@@ -44,7 +44,7 @@ export const useWorkItemCommentOperations = (
   const operations: TCommentsOperations = useMemo(() => {
     // Define operations object with all methods
     const ops: TCommentsOperations = {
-      copyCommentLink: (id) => {
+      copyCommentLink: async (id) => {
         if (!workspaceSlug || !issueDetails) return;
         try {
           const workItemLink = generateWorkItemLink({
@@ -55,12 +55,11 @@ export const useWorkItemCommentOperations = (
             sequenceId: issueDetails.sequence_id,
           });
           const commentLink = `${workItemLink}#comment-${id}`;
-          copyUrlToClipboard(commentLink).then(() => {
-            setToast({
-              title: t("common.success"),
-              type: TOAST_TYPE.SUCCESS,
-              message: t("issue.comments.copy_link.success"),
-            });
+          await copyUrlToClipboard(commentLink);
+          setToast({
+            title: t("common.success"),
+            type: TOAST_TYPE.SUCCESS,
+            message: t("issue.comments.copy_link.success"),
           });
         } catch (error) {
           console.error("Error in copying comment link:", error);
@@ -139,7 +138,7 @@ export const useWorkItemCommentOperations = (
           return res;
         } catch (error) {
           console.log("Error in uploading comment asset:", error);
-          throw new Error(t("issue.comments.upload.error"));
+          throw new Error(t("issue.comments.upload.error"), { cause: error });
         }
       },
       duplicateCommentAsset: async (assetId, commentId) => {
@@ -210,6 +209,7 @@ export const useWorkItemCommentOperations = (
       },
     };
     return ops;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- stable store action refs; full deps cause unnecessary rebuilds
   }, [workspaceSlug, projectId, issueId, createComment, updateComment, uploadEditorAsset, removeComment]);
 
   return operations;

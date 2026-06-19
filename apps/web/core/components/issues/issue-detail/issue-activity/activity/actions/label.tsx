@@ -7,7 +7,7 @@
 import { observer } from "mobx-react";
 import { LabelPropertyIcon } from "@plane/propel/icons";
 // hooks
-import { useIssueDetail } from "@/hooks/store/use-issue-detail";
+import { useActiveIssueDetail } from "@/hooks/store/use-issue-detail";
 import { useLabel } from "@/hooks/store/use-label";
 // components
 import { IssueActivityBlockComponent, IssueLink, LabelActivityChip } from "./";
@@ -19,7 +19,7 @@ export const IssueLabelActivity = observer(function IssueLabelActivity(props: TI
   // hooks
   const {
     activity: { getActivityById },
-  } = useIssueDetail();
+  } = useActiveIssueDetail();
   const { getLabelById } = useLabel();
 
   const activity = getActivityById(activityId);

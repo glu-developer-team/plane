@@ -9,7 +9,7 @@ import { Network } from "lucide-react";
 // plane imports
 import { Tooltip } from "@plane/propel/tooltip";
 import { renderFormattedTime, renderFormattedDate, calculateTimeAgo } from "@plane/utils";
-import { useIssueDetail } from "@/hooks/store/use-issue-detail";
+import { useActiveIssueDetail } from "@/hooks/store/use-issue-detail";
 import { usePlatformOS } from "@/hooks/use-platform-os";
 // plane web imports
 import { IssueCreatorDisplay } from "@/plane-web/components/issues/issue-details/issue-creator";
@@ -29,7 +29,7 @@ export function IssueActivityBlockComponent(props: TIssueActivityBlockComponent)
   // hooks
   const {
     activity: { getActivityById },
-  } = useIssueDetail();
+  } = useActiveIssueDetail();
 
   const activity = getActivityById(activityId);
   const { isMobile } = usePlatformOS();

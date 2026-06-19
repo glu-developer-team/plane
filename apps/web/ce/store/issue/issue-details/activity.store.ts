@@ -179,7 +179,12 @@ export class IssueActivityStore implements IIssueActivityStore {
 
       return activities;
     } catch (error) {
-      this.loader = undefined;
+      runInAction(() => {
+        if (this.getActivitiesByIssueId(issueId) === undefined) {
+          set(this.activities, issueId, []);
+        }
+        this.loader = undefined;
+      });
       throw error;
     }
   }

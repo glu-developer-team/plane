@@ -7,7 +7,7 @@
 import { observer } from "mobx-react";
 import { Type } from "lucide-react";
 // hooks
-import { useIssueDetail } from "@/hooks/store/use-issue-detail";
+import { useActiveIssueDetail } from "@/hooks/store/use-issue-detail";
 // components
 import { IssueActivityBlockComponent } from "./";
 
@@ -18,7 +18,7 @@ export const IssueNameActivity = observer(function IssueNameActivity(props: TIss
   // hooks
   const {
     activity: { getActivityById },
-  } = useIssueDetail();
+  } = useActiveIssueDetail();
 
   const activity = getActivityById(activityId);
 

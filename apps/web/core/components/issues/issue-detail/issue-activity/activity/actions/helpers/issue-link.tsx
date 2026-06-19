@@ -7,7 +7,7 @@
 import { Tooltip } from "@plane/propel/tooltip";
 import { generateWorkItemLink } from "@plane/utils";
 // hooks
-import { useIssueDetail } from "@/hooks/store/use-issue-detail";
+import { useActiveIssueDetail } from "@/hooks/store/use-issue-detail";
 import { usePlatformOS } from "@/hooks/use-platform-os";
 
 type TIssueLink = {
@@ -19,7 +19,7 @@ export function IssueLink(props: TIssueLink) {
   // hooks
   const {
     activity: { getActivityById },
-  } = useIssueDetail();
+  } = useActiveIssueDetail();
   const { isMobile } = usePlatformOS();
   const activity = getActivityById(activityId);
 

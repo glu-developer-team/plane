@@ -12,7 +12,7 @@ import type { TCommentsOperations } from "@plane/types";
 // components
 import { CommentCard } from "@/components/comments/card/root";
 // hooks
-import { useIssueDetail } from "@/hooks/store/use-issue-detail";
+import { useActiveIssueDetail } from "@/hooks/store/use-issue-detail";
 // plane web components
 import { IssueAdditionalPropertiesActivity } from "@/plane-web/components/issues/issue-details/issue-properties-activity";
 import { IssueActivityWorklog } from "@/plane-web/components/issues/worklog/activity/root";
@@ -48,7 +48,7 @@ export const IssueActivityCommentRoot = observer(function IssueActivityCommentRo
   const {
     activity: { getActivityAndCommentsByIssueId },
     comment: { getCommentById },
-  } = useIssueDetail();
+  } = useActiveIssueDetail();
   // derived values
   const activityAndComments = getActivityAndCommentsByIssueId(issueId, sortOrder);
 

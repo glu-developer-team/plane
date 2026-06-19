@@ -18,7 +18,8 @@ import type { TFileSignedURLResponse, TIssueComment } from "@plane/types";
 // components
 import { CommentCreate } from "@/components/comments/comment-create";
 // hooks
-import { useIssueDetail } from "@/hooks/store/use-issue-detail";
+import { IssueDetailStoreContext, useWorkItemIssueDetail } from "@/hooks/store/use-issue-detail";
+import type { TIssueServiceType } from "@plane/types";
 import { useProject } from "@/hooks/store/use-project";
 import { useUser, useUserPermissions } from "@/hooks/store/user";
 // plane web components
@@ -34,6 +35,7 @@ type TIssueActivity = {
   issueId: string;
   disabled?: boolean;
   isIntakeIssue?: boolean;
+  issueServiceType?: TIssueServiceType;
 };
 
 export type TActivityOperations = {
@@ -44,7 +46,8 @@ export type TActivityOperations = {
 };
 
 export const IssueActivity = observer(function IssueActivity(props: TIssueActivity) {
-  const { workspaceSlug, projectId, issueId, disabled = false, isIntakeIssue = false } = props;
+  const { workspaceSlug, projectId, issueId, disabled = false, isIntakeIssue = false, issueServiceType } = props;
+  const issueDetailStore = useWorkItemIssueDetail(issueId, issueServiceType);
   // i18n
   const { t } = useTranslation();
   // hooks
@@ -53,16 +56,12 @@ export const IssueActivity = observer(function IssueActivity(props: TIssueActivi
     defaultActivityFilters
   );
   const { setValue: setSortOrder, storedValue: sortOrder } = useLocalStorage("activity_sort_order", E_SORT_ORDER.ASC);
-  // store hooks
-  const {
-    issue: { getIssueById },
-  } = useIssueDetail();
 
   const { getProjectRoleByWorkspaceSlugAndProjectId } = useUserPermissions();
   const { getProjectById } = useProject();
   const { data: currentUser } = useUser();
   // derived values
-  const issue = issueId ? getIssueById(issueId) : undefined;
+  const issue = issueId ? issueDetailStore.issue.getIssueById(issueId) : undefined;
   const currentUserProjectRole = getProjectRoleByWorkspaceSlugAndProjectId(workspaceSlug, projectId);
   const isAdmin = currentUserProjectRole === EUserPermissions.ADMIN;
   const isGuest = currentUserProjectRole === EUserPermissions.GUEST;
@@ -105,49 +104,51 @@ export const IssueActivity = observer(function IssueActivity(props: TIssueActivi
   if (!project) return <></>;
 
   return (
-    <div className="space-y-4">
-      {/* header */}
-      <div className="flex items-center justify-between">
-        <div className="text-h5-medium text-primary">{t("common.activity")}</div>
-        <div className="flex items-center gap-2">
-          {isWorklogButtonEnabled && (
-            <IssueActivityWorklogCreateButton
-              workspaceSlug={workspaceSlug}
-              projectId={projectId}
-              issueId={issueId}
-              disabled={disabled}
-            />
-          )}
-          <ActivitySortRoot sortOrder={sortOrder || E_SORT_ORDER.ASC} toggleSort={toggleSortOrder} />
-          <ActivityFilterRoot
-            selectedFilters={selectedFilters || defaultActivityFilters}
-            toggleFilter={toggleFilter}
-            isIntakeIssue={isIntakeIssue}
-            projectId={projectId}
-          />
-        </div>
-      </div>
-
-      {/* rendering activity */}
-      <div className="space-y-3">
-        <div className="min-h-[200px]">
-          <div className="space-y-3">
-            {!disabled && sortOrder === E_SORT_ORDER.DESC && renderCommentCreationBox}
-            <IssueActivityCommentRoot
-              projectId={projectId}
-              workspaceSlug={workspaceSlug}
-              isIntakeIssue={isIntakeIssue}
-              issueId={issueId}
+    <IssueDetailStoreContext.Provider value={issueDetailStore}>
+      <div className="space-y-4">
+        {/* header */}
+        <div className="flex items-center justify-between">
+          <div className="text-h5-medium text-primary">{t("common.activity")}</div>
+          <div className="flex items-center gap-2">
+            {isWorklogButtonEnabled && (
+              <IssueActivityWorklogCreateButton
+                workspaceSlug={workspaceSlug}
+                projectId={projectId}
+                issueId={issueId}
+                disabled={disabled}
+              />
+            )}
+            <ActivitySortRoot sortOrder={sortOrder || E_SORT_ORDER.ASC} toggleSort={toggleSortOrder} />
+            <ActivityFilterRoot
               selectedFilters={selectedFilters || defaultActivityFilters}
-              activityOperations={activityOperations}
-              showAccessSpecifier={!!project.anchor}
-              disabled={disabled}
-              sortOrder={sortOrder || E_SORT_ORDER.ASC}
+              toggleFilter={toggleFilter}
+              isIntakeIssue={isIntakeIssue}
+              projectId={projectId}
             />
-            {!disabled && sortOrder === E_SORT_ORDER.ASC && renderCommentCreationBox}
+          </div>
+        </div>
+
+        {/* rendering activity */}
+        <div className="space-y-3">
+          <div className="min-h-[200px]">
+            <div className="space-y-3">
+              {!disabled && sortOrder === E_SORT_ORDER.DESC && renderCommentCreationBox}
+              <IssueActivityCommentRoot
+                projectId={projectId}
+                workspaceSlug={workspaceSlug}
+                isIntakeIssue={isIntakeIssue}
+                issueId={issueId}
+                selectedFilters={selectedFilters || defaultActivityFilters}
+                activityOperations={activityOperations}
+                showAccessSpecifier={!!project.anchor}
+                disabled={disabled}
+                sortOrder={sortOrder || E_SORT_ORDER.ASC}
+              />
+              {!disabled && sortOrder === E_SORT_ORDER.ASC && renderCommentCreationBox}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </IssueDetailStoreContext.Provider>
   );
 });
