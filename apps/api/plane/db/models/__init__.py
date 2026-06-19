@@ -32,6 +32,10 @@ from .integration import (
     BacklogCommentSync,
     BacklogActivitySync,
     BacklogSyncJob,
+    GithubProjectSync,
+    GithubPRSync,
+    GithubPRCommentSync,
+    GithubSyncJob,
 )
 from .issue import (
     CommentReaction,

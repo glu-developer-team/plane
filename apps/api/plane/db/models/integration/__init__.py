@@ -17,3 +17,9 @@ from .backlog import (
     BacklogActivitySync,
     BacklogSyncJob,
 )
+from .github_pr import (
+    GithubProjectSync,
+    GithubPRSync,
+    GithubPRCommentSync,
+    GithubSyncJob,
+)

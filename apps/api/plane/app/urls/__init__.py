@@ -24,6 +24,7 @@ from .workspace import urlpatterns as workspace_urls
 from .timezone import urlpatterns as timezone_urls
 from .exporter import urlpatterns as exporter_urls
 from .backlog import urlpatterns as backlog_urls
+from .github_pr import urlpatterns as github_pr_urls
 
 urlpatterns = [
     *analytic_urls,
@@ -48,4 +49,5 @@ urlpatterns = [
     *timezone_urls,
     *exporter_urls,
     *backlog_urls,
+    *github_pr_urls,
 ]

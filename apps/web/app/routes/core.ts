@@ -359,6 +359,11 @@ export const coreRoutes: RouteConfigEntry[] = [
               ":workspaceSlug/settings/projects/:projectId/integrations/backlog",
               "./(all)/[workspaceSlug]/(settings)/settings/projects/[projectId]/integrations/backlog/page.tsx"
             ),
+            // Project GitHub PR integration
+            route(
+              ":workspaceSlug/settings/projects/:projectId/integrations/github",
+              "./(all)/[workspaceSlug]/(settings)/settings/projects/[projectId]/integrations/github/page.tsx"
+            ),
           ]),
         ]),
       ]),

@@ -31,7 +31,8 @@ export type TProjectSettingsTabs =
   | "labels"
   | "estimates"
   | "automations"
-  | "integrations_backlog";
+  | "integrations_backlog"
+  | "integrations_github";
 
 export interface IBacklogLocaleEntry {
   japanese: string;
@@ -64,6 +65,20 @@ export interface IBacklogProjectSync {
   default_locale_entries?: IBacklogLocaleEntry[];
   custom_locale_entries?: IBacklogLocaleEntry[];
   status_locale_entries?: IBacklogStatusLocaleEntry[];
+}
+
+export type TGithubPRSyncMode = "github_to_plane" | "bidirectional";
+
+export interface IGithubProjectSync {
+  id?: string;
+  enabled: boolean;
+  repo_owner: string;
+  repo_name: string;
+  installation_id?: number | null;
+  is_enabled: boolean;
+  sync_mode?: TGithubPRSyncMode;
+  last_webhook_at?: string | null;
+  last_sync_completed_at?: string | null;
 }
 
 export interface IBacklogPullResponse {
