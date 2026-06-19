@@ -26,7 +26,26 @@
 
 Meet [Plane](https://plane.so/), an open-source project management tool to track issues, run ~sprints~ cycles, and manage product roadmaps without the chaos of managing the tool itself. 🧘‍♀️
 
+> **Fork:** [glu-developer-team/plane](https://github.com/glu-developer-team/plane) — based on [makeplane/plane](https://github.com/makeplane/plane) v1.3.x (`develop` branch). See [Changes vs upstream](#-changes-vs-upstream-makeplaneplane) below.
+
 > Plane is evolving every day. Your suggestions, ideas, and reported bugs help us immensely. Do not hesitate to join in the conversation on [Forum](https://forum.plane.so) or raise a GitHub issue. We read everything and respond to most.
+
+## ✨ Changes vs upstream (makeplane/plane)
+
+Product and API changes in this fork only — not in official Plane CE.
+
+| Feature                 | Summary                                                                                                                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Epics (CE)**          | First-class epic work items: App + Public API, list/detail UI, `parent_id` linking, epic filters in Views.                                                               |
+| **Nested pages**        | Sub-pages via `parent_id`, master-detail layout in the web app.                                                                                                          |
+| **Pages Public API**    | v1 CRUD for project pages (API key auth).                                                                                                                                |
+| **Mermaid**             | Diagram rendering in editor code blocks.                                                                                                                                 |
+| **R2 uploads**          | Presigned PUT to Cloudflare R2 (S3-compatible `AWS_*` env).                                                                                                              |
+| **Backlog.com**         | Per-project integration: bidirectional issue/comment sync, Markdown conversion, JP↔EN locale mapping. Settings → Integrations → Backlog.                                 |
+| **GitHub PR connector** | Link PRs to work items via tags; bidirectional PR comment sync; GitHub App + webhooks. Settings → Integrations → GitHub. Env: `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`. |
+| **Self-hosted deploy**  | Local Docker build (`deploy/`), self-hosted CI — see [deploy/README.md](./deploy/README.md).                                                                             |
+
+Issues and PRs for fork-specific features: [glu-developer-team/plane/issues](https://github.com/glu-developer-team/plane/issues).
 
 ## 🚀 Installation
 
@@ -36,11 +55,12 @@ Getting started with Plane is simple. Choose the setup that works best for you:
   Sign up for a free account on [Plane Cloud](https://app.plane.so)—it's the fastest way to get up and running without worrying about infrastructure.
 
 - **Self-host Plane**
-  Prefer full control over your data and infrastructure? Install and run Plane on your own servers. Follow our detailed [deployment guides](https://developers.plane.so/self-hosting/overview) to get started.
+  Prefer full control over your data and infrastructure? For **this fork** (Epics, integrations, custom deploy), see [deploy/README.md](./deploy/README.md). For stock upstream CE, follow the [official deployment guides](https://developers.plane.so/self-hosting/overview).
 
 | Installation methods | Docs link                                                                                                                                                                               |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Docker               | [![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)](https://developers.plane.so/self-hosting/methods/docker-compose)         |
+| Docker (this fork)   | [deploy/README.md](./deploy/README.md)                                                                                                                                                  |
+| Docker (upstream)    | [![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)](https://developers.plane.so/self-hosting/methods/docker-compose)         |
 | Kubernetes           | [![Kubernetes](https://img.shields.io/badge/kubernetes-%23326ce5.svg?style=for-the-badge&logo=kubernetes&logoColor=white)](https://developers.plane.so/self-hosting/methods/kubernetes) |
 
 `Instance admins` can configure instance settings with [God mode](https://developers.plane.so/self-hosting/govern/instance-admin).
