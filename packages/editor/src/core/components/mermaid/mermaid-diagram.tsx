@@ -8,6 +8,7 @@ import mermaid from "mermaid";
 import { useEffect, useId, useState } from "react";
 import { FullScreenPanelIcon } from "@plane/propel/icons";
 import { cn } from "@plane/utils";
+import { normalizeMermaidSource } from "@/extensions/code/utils/normalize-mermaid-source";
 import { MermaidFullscreenModal } from "./mermaid-fullscreen-modal";
 import type { TMermaidTheme } from "./use-editor-theme";
 import { useEditorTheme } from "./use-editor-theme";
@@ -25,13 +26,6 @@ type Props = {
   source: string;
 };
 
-function decodeHtmlEntities(text: string): string {
-  if (!text.includes("&")) return text;
-  const textarea = document.createElement("textarea");
-  textarea.innerHTML = text;
-  return textarea.value;
-}
-
 export function MermaidDiagram({ source }: Props) {
   const reactId = useId();
   const renderId = `mermaid-${reactId.replace(/:/g, "")}`;
@@ -41,7 +35,7 @@ export function MermaidDiagram({ source }: Props) {
   const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
 
   useEffect(() => {
-    const trimmed = decodeHtmlEntities(source).trim();
+    const trimmed = normalizeMermaidSource(source);
     if (!trimmed) {
       setSvg("");
       setError(null);

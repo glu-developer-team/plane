@@ -7,11 +7,12 @@
 import type { NodeViewProps } from "@tiptap/react";
 import { NodeViewContent, NodeViewWrapper } from "@tiptap/react";
 import { CheckIcon } from "lucide-react";
-import { useState } from "react";
-import { CopyIcon } from "@plane/propel/icons";
+import { useEffect, useRef, useState } from "react";
+import { ChevronDownIcon, ChevronUpIcon, CopyIcon } from "@plane/propel/icons";
 import { Tooltip } from "@plane/propel/tooltip";
 import { cn } from "@plane/utils";
 import { MermaidDiagram } from "@/components/mermaid/mermaid-diagram";
+import { normalizeMermaidSource } from "./utils/normalize-mermaid-source";
 import type { TCodeBlockAttributes } from "./types";
 import { ECodeBlockAttributeNames } from "./types";
 
@@ -22,8 +23,38 @@ export function CodeBlockComponent(props: NodeViewProps) {
   const language = attrs[ECodeBlockAttributeNames.LANGUAGE];
   const isMermaid = language === "mermaid";
   const isEditable = editor.isEditable;
-  const source = node.textContent;
+  const rawSource = node.textContent;
+  const source = isMermaid ? normalizeMermaidSource(rawSource) : rawSource;
   const hasSource = Boolean(source.trim());
+  const [isSourceExpanded, setIsSourceExpanded] = useState(!hasSource);
+  const hadSourceRef = useRef(hasSource);
+
+  useEffect(() => {
+    if (!hadSourceRef.current && hasSource) {
+      setIsSourceExpanded(false);
+    }
+
+    if (!hasSource) {
+      setIsSourceExpanded(true);
+    }
+
+    hadSourceRef.current = hasSource;
+  }, [hasSource]);
+
+  const expandSource = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsSourceExpanded(true);
+    window.setTimeout(() => {
+      editor.chain().focus().run();
+    }, 0);
+  };
+
+  const collapseSource = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsSourceExpanded(false);
+  };
 
   const copyToClipboard = async (e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
     try {
@@ -95,9 +126,34 @@ export function CodeBlockComponent(props: NodeViewProps) {
 
         {hasSource && <MermaidDiagram source={source} />}
 
+        {hasSource && (
+          <div className="mt-2 flex items-center">
+            <button
+              type="button"
+              contentEditable={false}
+              className="text-xs inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-tertiary transition duration-150 ease-in-out hover:bg-layer-2 hover:text-primary"
+              onClick={isSourceExpanded ? collapseSource : expandSource}
+              aria-expanded={isSourceExpanded}
+            >
+              {isSourceExpanded ? (
+                <>
+                  <ChevronUpIcon className="size-3.5" />
+                  Hide source
+                </>
+              ) : (
+                <>
+                  <ChevronDownIcon className="size-3.5" />
+                  Show source
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
         <pre
           className={cn("rounded-lg bg-layer-3 p-4 text-primary", {
-            "mt-2": hasSource,
+            "mt-2": !hasSource || isSourceExpanded,
+            hidden: hasSource && !isSourceExpanded,
           })}
         >
           <NodeViewContent as="code" className="whitespace-pre-wrap" />

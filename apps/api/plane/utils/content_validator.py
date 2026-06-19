@@ -5,6 +5,7 @@
 # Python imports
 import base64
 import nh3
+import html
 from plane.utils.exception_logger import log_exception
 from bs4 import BeautifulSoup
 from collections import defaultdict
@@ -159,6 +160,21 @@ ATTRIBUTES = {
 SAFE_PROTOCOLS = {"http", "https", "mailto", "tel"}
 
 
+def _unescape_code_block_entities(clean_html: str) -> str:
+    """Decode HTML entities inside pre/code so mermaid arrows survive sanitization."""
+    try:
+        from bs4 import NavigableString
+
+        soup = BeautifulSoup(clean_html or "", "html.parser")
+        for tag in soup.find_all("code"):
+            decoded = html.unescape(tag.get_text())
+            tag.clear()
+            tag.append(NavigableString(decoded))
+        return str(soup)
+    except Exception:
+        return clean_html
+
+
 def _compute_html_sanitization_diff(before_html: str, after_html: str):
     """
     Compute a coarse diff between original and sanitized HTML.
@@ -227,6 +243,7 @@ def validate_html_content(html_content: str):
             attributes=ATTRIBUTES,
             url_schemes=SAFE_PROTOCOLS,
         )
+        clean_html = _unescape_code_block_entities(clean_html)
         # Report removals to logger (Sentry) if anything was stripped
         diff = _compute_html_sanitization_diff(html_content, clean_html)
         if diff.get("removed_tags") or diff.get("removed_attributes"):

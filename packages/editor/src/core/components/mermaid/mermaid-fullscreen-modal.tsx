@@ -10,6 +10,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { CloseIcon, PlusIcon } from "@plane/propel/icons";
 import { cn } from "@plane/utils";
+import { normalizeMermaidSource } from "@/extensions/code/utils/normalize-mermaid-source";
 
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 3;
@@ -22,13 +23,6 @@ type Props = {
   onClose: () => void;
   source: string;
 };
-
-function decodeHtmlEntities(text: string): string {
-  if (!text.includes("&")) return text;
-  const textarea = document.createElement("textarea");
-  textarea.innerHTML = text;
-  return textarea.value;
-}
 
 function MermaidFullscreenModalContent({ isOpen, onClose, source }: Props) {
   const reactId = useId();
@@ -63,7 +57,7 @@ function MermaidFullscreenModalContent({ isOpen, onClose, source }: Props) {
         return ZOOM_STEPS.find((step) => step > prev) ?? MAX_ZOOM;
       }
 
-      return [...ZOOM_STEPS].reverse().find((step) => step < prev) ?? MIN_ZOOM;
+      return [...ZOOM_STEPS].toReversed().find((step) => step < prev) ?? MIN_ZOOM;
     });
 
     setPan({ x: 0, y: 0 });
@@ -133,7 +127,7 @@ function MermaidFullscreenModalContent({ isOpen, onClose, source }: Props) {
 
     resetView();
 
-    const trimmed = decodeHtmlEntities(source).trim();
+    const trimmed = normalizeMermaidSource(source);
     if (!trimmed) {
       setSvg("");
       setRenderError("No diagram source to display.");

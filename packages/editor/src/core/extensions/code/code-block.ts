@@ -8,7 +8,9 @@ import { mergeAttributes, Node, textblockTypeInputRule } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 // constants
 import { CORE_EXTENSIONS } from "@/constants/extension";
+import { MermaidNormalizePlugin } from "./mermaid-normalize-plugin";
 import { extractMermaidFromPaste, normalizePastedPlainText } from "./utils/mermaid-paste";
+import { isMermaidLanguage, normalizeMermaidSource } from "./utils/normalize-mermaid-source";
 
 export type CodeBlockOptions = {
   /**
@@ -254,6 +256,7 @@ export const CodeBlock = Node.create<CodeBlockOptions>({
   },
   addProseMirrorPlugins() {
     return [
+      MermaidNormalizePlugin(),
       new Plugin({
         key: new PluginKey("codeBlockVSCodeHandlerCustom"),
         props: {
@@ -265,9 +268,14 @@ export const CodeBlock = Node.create<CodeBlockOptions>({
 
               if (this.editor.isActive(this.type.name)) {
                 event.preventDefault();
-                const text = normalizePastedPlainText(event.clipboardData.getData("text/plain"));
+                let text = normalizePastedPlainText(event.clipboardData.getData("text/plain"));
                 if (!text) {
                   return false;
+                }
+
+                const language = view.state.selection.$from.parent.attrs.language;
+                if (isMermaidLanguage(language)) {
+                  text = normalizeMermaidSource(text);
                 }
 
                 const { tr } = view.state;
