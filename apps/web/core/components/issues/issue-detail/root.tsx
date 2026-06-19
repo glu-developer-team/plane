@@ -11,7 +11,7 @@ import { EUserPermissions, EUserPermissionsLevel } from "@plane/constants";
 import { useTranslation } from "@plane/i18n";
 import { TOAST_TYPE, setPromiseToast, setToast } from "@plane/propel/toast";
 import type { TIssue } from "@plane/types";
-import { EIssuesStoreType } from "@plane/types";
+import { EIssueServiceType, EIssuesStoreType } from "@plane/types";
 // assets
 import emptyIssue from "@/app/assets/empty-state/issue.svg?url";
 // components
@@ -60,22 +60,32 @@ export type TIssueDetailRoot = {
 
 export const IssueDetailRoot = observer(function IssueDetailRoot(props: TIssueDetailRoot) {
   const { t } = useTranslation();
-  const { workspaceSlug, projectId, issueId, is_archived = false } = props;
+  const {
+    workspaceSlug: rootWorkspaceSlug,
+    projectId: rootProjectId,
+    issueId: rootIssueId,
+    is_archived = false,
+  } = props;
   // router
   const router = useAppRouter();
   // hooks
+  const issueDetailStore = useIssueDetail(EIssueServiceType.ISSUES);
+  const epicDetailStore = useIssueDetail(EIssueServiceType.EPICS);
+  const issue = issueDetailStore.issue.getIssueById(rootIssueId) ?? epicDetailStore.issue.getIssueById(rootIssueId);
+  const activeDetailStore = issue?.is_epic ? epicDetailStore : issueDetailStore;
   const {
-    issue: { getIssueById },
-    fetchIssue,
-    updateIssue,
-    removeIssue,
-    archiveIssue,
-    addCycleToIssue,
-    addIssueToCycle,
-    removeIssueFromCycle,
-    changeModulesInIssue,
-    removeIssueFromModule,
-  } = useIssueDetail();
+    issue: {
+      fetchIssue,
+      updateIssue,
+      removeIssue,
+      archiveIssue,
+      addCycleToIssue,
+      addIssueToCycle,
+      removeIssueFromCycle,
+      changeModulesInIssue,
+      removeIssueFromModule,
+    },
+  } = activeDetailStore;
   const {
     issues: { removeIssue: removeArchivedIssue },
   } = useIssues(EIssuesStoreType.ARCHIVED);
@@ -216,34 +226,34 @@ export const IssueDetailRoot = observer(function IssueDetailRoot(props: TIssueDe
   );
 
   // issue details
-  const issue = getIssueById(issueId);
+  const issueForRender = issue ?? issueDetailStore.issue.getIssueById(rootIssueId);
   // checking if issue is editable, based on user role
   const isEditable = allowPermissions(
     [EUserPermissions.ADMIN, EUserPermissions.MEMBER],
     EUserPermissionsLevel.PROJECT,
-    workspaceSlug,
-    projectId
+    rootWorkspaceSlug,
+    rootProjectId
   );
 
   return (
     <>
-      {!issue ? (
+      {!issueForRender ? (
         <EmptyState
           image={emptyIssue}
           title={t("issue.empty_state.issue_detail.title")}
           description={t("issue.empty_state.issue_detail.description")}
           primaryButton={{
             text: t("issue.empty_state.issue_detail.primary_button.text"),
-            onClick: () => router.push(`/${workspaceSlug}/projects/${projectId}/issues`),
+            onClick: () => router.push(`/${rootWorkspaceSlug}/projects/${rootProjectId}/issues`),
           }}
         />
       ) : (
         <div className="flex h-full w-full overflow-hidden">
           <div className="h-full w-full space-y-6 overflow-y-auto px-9 py-5">
             <IssueMainContent
-              workspaceSlug={workspaceSlug}
-              projectId={projectId}
-              issueId={issueId}
+              workspaceSlug={rootWorkspaceSlug}
+              projectId={rootProjectId}
+              issueId={rootIssueId}
               issueOperations={issueOperations}
               isEditable={isEditable}
               isArchived={is_archived}
@@ -254,9 +264,9 @@ export const IssueDetailRoot = observer(function IssueDetailRoot(props: TIssueDe
             style={issueDetailSidebarCollapsed ? { right: `-${window?.innerWidth || 0}px` } : {}}
           >
             <IssueDetailsSidebar
-              workspaceSlug={workspaceSlug}
-              projectId={projectId}
-              issueId={issueId}
+              workspaceSlug={rootWorkspaceSlug}
+              projectId={rootProjectId}
+              issueId={rootIssueId}
               issueOperations={issueOperations}
               isEditable={!is_archived && isEditable}
             />

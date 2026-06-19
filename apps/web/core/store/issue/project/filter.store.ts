@@ -28,8 +28,11 @@ import { IssueFilterHelperStore } from "../helpers/issue-filter-helper.store";
 // types
 import type { IIssueRootStore } from "../root.store";
 import { ProjectService } from "@/services/project";
+import { IssueFiltersService } from "@/services/issue_filter.service";
 // constants
 // services
+
+type TProjectFilterScope = "issues" | "epics";
 
 export interface IProjectIssuesFilter extends IBaseIssueFilterStore {
   //helper actions
@@ -63,9 +66,12 @@ export class ProjectIssuesFilter extends IssueFilterHelperStore implements IProj
   rootIssueStore: IIssueRootStore;
   // services
   projectService;
+  issueFiltersService;
+  protected scope: TProjectFilterScope;
 
-  constructor(_rootStore: IIssueRootStore) {
+  constructor(_rootStore: IIssueRootStore, options?: { scope?: TProjectFilterScope }) {
     super();
+    this.scope = options?.scope ?? "issues";
     makeObservable(this, {
       // observables
       filters: observable,
@@ -81,6 +87,37 @@ export class ProjectIssuesFilter extends IssueFilterHelperStore implements IProj
     this.rootIssueStore = _rootStore;
     // services
     this.projectService = new ProjectService();
+    this.issueFiltersService = new IssueFiltersService();
+  }
+
+  private get issuesStore() {
+    return this.scope === "epics" ? this.rootIssueStore.projectEpics : this.rootIssueStore.projectIssues;
+  }
+
+  private get kanbanStoreType() {
+    return this.scope === "epics" ? EIssuesStoreType.EPIC : EIssuesStoreType.PROJECT;
+  }
+
+  private async fetchProjectFilters(workspaceSlug: string, projectId: string) {
+    if (this.scope === "epics") {
+      return this.issueFiltersService.fetchProjectEpicFilters(workspaceSlug, projectId);
+    }
+    return this.projectService.getProjectUserProperties(workspaceSlug, projectId);
+  }
+
+  private async patchProjectFilters(
+    workspaceSlug: string,
+    projectId: string,
+    data: Partial<{
+      rich_filters: TWorkItemFilterExpression;
+      display_filters: IIssueDisplayFilterOptions;
+      display_properties: IIssueDisplayProperties;
+    }>
+  ) {
+    if (this.scope === "epics") {
+      return this.issueFiltersService.patchProjectEpicFilters(workspaceSlug, projectId, data);
+    }
+    return this.projectService.updateProjectUserProperties(workspaceSlug, projectId, data);
   }
 
   get issueFilters() {
@@ -108,7 +145,7 @@ export class ProjectIssuesFilter extends IssueFilterHelperStore implements IProj
     const userFilters = this.getIssueFilters(projectId);
     if (!userFilters) return undefined;
 
-    const filteredParams = handleIssueQueryParamsByLayout(userFilters?.displayFilters?.layout, "issues");
+    const filteredParams = handleIssueQueryParamsByLayout(userFilters?.displayFilters?.layout, this.scope);
     if (!filteredParams) return undefined;
 
     const filteredRouteParams: Partial<Record<TIssueParams, string | boolean>> = this.computedFilteredParams(
@@ -135,7 +172,7 @@ export class ProjectIssuesFilter extends IssueFilterHelperStore implements IProj
   );
 
   fetchFilters = async (workspaceSlug: string, projectId: string) => {
-    const _filters = await this.projectService.getProjectUserProperties(workspaceSlug, projectId);
+    const _filters = await this.fetchProjectFilters(workspaceSlug, projectId);
 
     const richFilters = _filters?.rich_filters;
     const displayFilters = this.computedDisplayFilters(_filters?.display_filters);
@@ -149,7 +186,7 @@ export class ProjectIssuesFilter extends IssueFilterHelperStore implements IProj
     const currentUserId = this.rootIssueStore.currentUserId;
     if (currentUserId) {
       const _kanbanFilters = this.handleIssuesLocalFilters.get(
-        EIssuesStoreType.PROJECT,
+        this.kanbanStoreType,
         workspaceSlug,
         projectId,
         currentUserId
@@ -181,8 +218,8 @@ export class ProjectIssuesFilter extends IssueFilterHelperStore implements IProj
         set(this.filters, [projectId, "richFilters"], filters);
       });
 
-      this.rootIssueStore.projectIssues.fetchIssuesWithExistingPagination(workspaceSlug, projectId, "mutation");
-      await this.projectService.updateProjectUserProperties(workspaceSlug, projectId, {
+      this.issuesStore.fetchIssuesWithExistingPagination(workspaceSlug, projectId, "mutation");
+      await this.patchProjectFilters(workspaceSlug, projectId, {
         rich_filters: filters,
       });
     } catch (error) {
@@ -237,14 +274,14 @@ export class ProjectIssuesFilter extends IssueFilterHelperStore implements IProj
           });
 
           if (this.getShouldClearIssues(updatedDisplayFilters)) {
-            this.rootIssueStore.projectIssues.clear(true); // clear issues for local store when some filters like layout changes
+            this.issuesStore.clear(true);
           }
 
           if (this.getShouldReFetchIssues(updatedDisplayFilters)) {
-            this.rootIssueStore.projectIssues.fetchIssuesWithExistingPagination(workspaceSlug, projectId, "mutation");
+            this.issuesStore.fetchIssuesWithExistingPagination(workspaceSlug, projectId, "mutation");
           }
 
-          await this.projectService.updateProjectUserProperties(workspaceSlug, projectId, {
+          await this.patchProjectFilters(workspaceSlug, projectId, {
             display_filters: _filters.displayFilters,
           });
 
@@ -264,7 +301,7 @@ export class ProjectIssuesFilter extends IssueFilterHelperStore implements IProj
             });
           });
 
-          await this.projectService.updateProjectUserProperties(workspaceSlug, projectId, {
+          await this.patchProjectFilters(workspaceSlug, projectId, {
             display_properties: _filters.displayProperties,
           });
           break;
@@ -276,7 +313,7 @@ export class ProjectIssuesFilter extends IssueFilterHelperStore implements IProj
 
           const currentUserId = this.rootIssueStore.currentUserId;
           if (currentUserId)
-            this.handleIssuesLocalFilters.set(EIssuesStoreType.PROJECT, type, workspaceSlug, projectId, currentUserId, {
+            this.handleIssuesLocalFilters.set(this.kanbanStoreType, type, workspaceSlug, projectId, currentUserId, {
               kanban_filters: _filters.kanbanFilters,
             });
 

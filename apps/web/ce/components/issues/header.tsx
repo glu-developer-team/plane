@@ -110,9 +110,9 @@ export const IssuesHeader = observer(function IssuesHeader() {
       <Header.RightItem>
         <div className="hidden gap-2 md:flex">
           <HeaderFilters
-            projectId={projectId}
+            projectId={projectId?.toString() ?? ""}
             currentProjectDetails={currentProjectDetails}
-            workspaceSlug={workspaceSlug}
+            workspaceSlug={workspaceSlug?.toString() ?? ""}
             canUserCreateIssue={canUserCreateIssue}
           />
         </div>

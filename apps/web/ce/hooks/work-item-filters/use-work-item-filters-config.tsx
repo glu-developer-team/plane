@@ -10,6 +10,7 @@ import { AtSign, Briefcase } from "lucide-react";
 import { Logo } from "@plane/propel/emoji-icon-picker";
 import {
   CalendarLayoutIcon,
+  EpicIcon,
   CycleGroupIcon,
   CycleIcon,
   ModuleIcon,
@@ -31,6 +32,7 @@ import type {
   IIssueLabel,
   IModule,
   IProject,
+  TIssue,
   TWorkItemFilterProperty,
 } from "@plane/types";
 import { Avatar } from "@plane/ui";
@@ -39,6 +41,7 @@ import {
   getCreatedAtFilterConfig,
   getCreatedByFilterConfig,
   getCycleFilterConfig,
+  getEpicFilterConfig,
   getFileURL,
   getLabelFilterConfig,
   getMentionFilterConfig,
@@ -55,6 +58,7 @@ import {
 } from "@plane/utils";
 // store hooks
 import { useCycle } from "@/hooks/store/use-cycle";
+import { useEpic } from "@/hooks/store/use-epic";
 import { useLabel } from "@/hooks/store/use-label";
 import { useMember } from "@/hooks/store/use-member";
 import { useModule } from "@/hooks/store/use-module";
@@ -66,6 +70,7 @@ import { useFiltersOperatorConfigs } from "@/plane-web/hooks/rich-filters/use-fi
 export type TWorkItemFiltersEntityProps = {
   workspaceSlug: string;
   cycleIds?: string[];
+  epicIds?: string[];
   labelIds?: string[];
   memberIds?: string[];
   moduleIds?: string[];
@@ -89,11 +94,22 @@ export type TWorkItemFiltersConfig = {
 };
 
 export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps): TWorkItemFiltersConfig => {
-  const { allowedFilters, cycleIds, labelIds, memberIds, moduleIds, projectId, projectIds, stateIds, workspaceSlug } =
-    props;
+  const {
+    allowedFilters,
+    cycleIds,
+    epicIds,
+    labelIds,
+    memberIds,
+    moduleIds,
+    projectId,
+    projectIds,
+    stateIds,
+    workspaceSlug,
+  } = props;
   // store hooks
   const { loader: projectLoader, getProjectById } = useProject();
   const { getCycleById } = useCycle();
+  const { getEpicById } = useEpic();
   const { getLabelById } = useLabel();
   const { getModuleById } = useModule();
   const { getStateById } = useProjectState();
@@ -130,11 +146,12 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
       moduleIds ? (moduleIds.map((moduleId) => getModuleById(moduleId)).filter((module) => module) as IModule[]) : [],
     [moduleIds, getModuleById]
   );
+  const epics = useMemo(
+    () => (epicIds ? epicIds.map((epicId) => getEpicById(epicId)).filter((epic): epic is TIssue => epic !== null) : []),
+    [epicIds, getEpicById]
+  );
   const projects = useMemo(
-    () =>
-      projectIds
-        ? (projectIds.map((projectId) => getProjectById(projectId)).filter((project) => project) as IProject[])
-        : [],
+    () => (projectIds ? (projectIds.map((id) => getProjectById(id)).filter((proj) => proj) as IProject[]) : []),
     [projectIds, getProjectById]
   );
   const areAllConfigsInitialized = useMemo(() => isLoaderReady(projectLoader), [projectLoader]);
@@ -211,6 +228,19 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
         ...operatorConfigs,
       }),
     [isFilterEnabled, project?.module_view, modules, operatorConfigs]
+  );
+
+  // epic filter config
+  const epicFilterConfig = useMemo(
+    () =>
+      getEpicFilterConfig<TWorkItemFilterProperty>("parent_id")({
+        isEnabled: isFilterEnabled("parent_id") && epicIds !== undefined,
+        filterIcon: EpicIcon,
+        getOptionIcon: () => <EpicIcon className="h-3 w-3 flex-shrink-0" />,
+        epics: epics ?? [],
+        ...operatorConfigs,
+      }),
+    [isFilterEnabled, epicIds, epics, operatorConfigs]
   );
 
   // assignee filter config
@@ -356,7 +386,7 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
         isEnabled: isFilterEnabled("project_id") && projects !== undefined,
         filterIcon: Briefcase,
         projects: projects,
-        getOptionIcon: (project) => <Logo logo={project.logo_props} size={12} />,
+        getOptionIcon: (projectOption) => <Logo logo={projectOption.logo_props} size={12} />,
         ...operatorConfigs,
       }),
     [isFilterEnabled, projects, operatorConfigs]
@@ -374,6 +404,7 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
       labelFilterConfig,
       cycleFilterConfig,
       moduleFilterConfig,
+      epicFilterConfig,
       startDateFilterConfig,
       targetDateFilterConfig,
       createdAtFilterConfig,
@@ -388,6 +419,7 @@ export const useWorkItemFiltersConfig = (props: TUseWorkItemFiltersConfigProps):
       label_id: labelFilterConfig,
       cycle_id: cycleFilterConfig,
       module_id: moduleFilterConfig,
+      parent_id: epicFilterConfig,
       assignee_id: assigneeFilterConfig,
       mention_id: mentionFilterConfig,
       created_by_id: createdByFilterConfig,

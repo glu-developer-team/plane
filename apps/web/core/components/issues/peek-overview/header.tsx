@@ -13,8 +13,8 @@ import { useTranslation } from "@plane/i18n";
 import { CenterPanelIcon, CopyLinkIcon, FullScreenPanelIcon, SidePanelIcon } from "@plane/propel/icons";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import { Tooltip } from "@plane/propel/tooltip";
-import type { TNameDescriptionLoader } from "@plane/types";
-import { EIssuesStoreType } from "@plane/types";
+import type { TNameDescriptionLoader, TIssueServiceType } from "@plane/types";
+import { EIssueServiceType, EIssuesStoreType } from "@plane/types";
 import { CustomSelect } from "@plane/ui";
 import { copyUrlToClipboard, generateWorkItemLink } from "@plane/utils";
 // hooks
@@ -65,6 +65,7 @@ export type PeekOverviewHeaderProps = {
   toggleEditIssueModal: (value: boolean) => void;
   handleRestoreIssue: () => Promise<void>;
   isSubmitting: TNameDescriptionLoader;
+  issueServiceType: TIssueServiceType;
 };
 
 export const IssuePeekOverviewHeader = observer(function IssuePeekOverviewHeader(props: PeekOverviewHeaderProps) {
@@ -84,6 +85,7 @@ export const IssuePeekOverviewHeader = observer(function IssuePeekOverviewHeader
     toggleEditIssueModal,
     handleRestoreIssue,
     isSubmitting,
+    issueServiceType,
   } = props;
   // ref
   const parentRef = useRef<HTMLDivElement>(null);
@@ -96,7 +98,7 @@ export const IssuePeekOverviewHeader = observer(function IssuePeekOverviewHeader
     removeIssue,
     archiveIssue,
     getIsIssuePeeked,
-  } = useIssueDetail();
+  } = useIssueDetail(issueServiceType);
   const { isMobile } = usePlatformOS();
   const { getProjectIdentifierById } = useProject();
   // derived values
@@ -114,6 +116,7 @@ export const IssuePeekOverviewHeader = observer(function IssuePeekOverviewHeader
     projectIdentifier,
     sequenceId: issueDetails?.sequence_id,
     isArchived,
+    isEpic: issueServiceType === EIssueServiceType.EPICS || issueDetails?.is_epic,
   });
 
   const handleCopyText = (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -125,6 +128,7 @@ export const IssuePeekOverviewHeader = observer(function IssuePeekOverviewHeader
         title: t("common.link_copied"),
         message: t("common.link_copied_to_clipboard"),
       });
+      return undefined;
     });
   };
 
@@ -134,6 +138,7 @@ export const IssuePeekOverviewHeader = observer(function IssuePeekOverviewHeader
 
       return deleteIssue(workspaceSlug, projectId, issueId).then(() => {
         setPeekIssue(undefined);
+        return undefined;
       });
     } catch (_error) {
       setToast({

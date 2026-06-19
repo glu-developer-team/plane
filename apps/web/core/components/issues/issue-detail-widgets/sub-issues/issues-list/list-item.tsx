@@ -69,13 +69,26 @@ export const SubIssuesListItem = observer(function SubIssuesListItem(props: Prop
   } = useIssueDetail(issueServiceType);
   const {
     subIssues: { subIssueHelpersByIssueId, setSubIssueHelpers },
-  } = useIssueDetail();
-  const { fetchSubIssues } = useSubIssueOperations(EIssueServiceType.ISSUES);
+  } = useIssueDetail(issueServiceType);
+  const issue = getIssueById(issueId);
+  const isEpicWorkItem = !!issue?.is_epic;
+  const { handleRedirection } = useIssuePeekOverviewRedirection(isEpicWorkItem);
+  const { peekIssue: epicPeekIssue } = useIssueDetail(EIssueServiceType.EPICS);
+  const { fetchSubIssues } = useSubIssueOperations(isEpicWorkItem ? EIssueServiceType.EPICS : EIssueServiceType.ISSUES);
   const { toggleCreateIssueModal, toggleDeleteIssueModal } = useIssueDetail(issueServiceType);
   const project = useProject();
-  const { handleRedirection } = useIssuePeekOverviewRedirection();
   const { isMobile } = usePlatformOS();
-  const issue = getIssueById(issueId);
+
+  const nestingLevel =
+    issueServiceType === EIssueServiceType.EPICS && epicPeekIssue?.issueId === rootIssueId
+      ? (epicPeekIssue.nestingLevel ?? 0) + 1
+      : 0;
+
+  //
+  const handleIssuePeekOverview = (peekTargetIssue: TIssue) =>
+    handleRedirection(workspaceSlug, peekTargetIssue, isMobile, nestingLevel);
+
+  if (!issue) return <></>;
 
   // derived values
   const projectDetail = (issue && issue.project_id && project.getProjectById(issue.project_id)) || undefined;
@@ -86,11 +99,6 @@ export const SubIssuesListItem = observer(function SubIssuesListItem(props: Prop
   // derived values
   const subIssueFilters = getSubIssueFilters(parentIssueId);
   const displayProperties = subIssueFilters?.displayProperties ?? {};
-
-  //
-  const handleIssuePeekOverview = (issue: TIssue) => handleRedirection(workspaceSlug, issue, isMobile);
-
-  if (!issue) return <></>;
 
   // check if current issue is the root issue
   const isCurrentIssueRoot = issueId === rootIssueId;
@@ -125,8 +133,9 @@ export const SubIssuesListItem = observer(function SubIssuesListItem(props: Prop
                       <Loader width={14} strokeWidth={2} className="animate-spin" />
                     </div>
                   ) : (
-                    <div
-                      className="flex h-full w-full cursor-pointer items-center justify-center text-placeholder hover:text-tertiary"
+                    <button
+                      type="button"
+                      className="flex h-full w-full cursor-pointer items-center justify-center border-none bg-transparent p-0 text-placeholder hover:text-tertiary"
                       onClick={async (e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -144,7 +153,7 @@ export const SubIssuesListItem = observer(function SubIssuesListItem(props: Prop
                         })}
                         strokeWidth={2.5}
                       />
-                    </div>
+                    </button>
                   )}
                 </>
               )}
@@ -172,7 +181,7 @@ export const SubIssuesListItem = observer(function SubIssuesListItem(props: Prop
 
             <div
               className="flex-shrink-0 text-13"
-              onClick={(e) => {
+              onPointerDown={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
               }}
@@ -265,6 +274,7 @@ export const SubIssuesListItem = observer(function SubIssuesListItem(props: Prop
             canEdit={canEdit}
             handleIssueCrudState={handleIssueCrudState}
             subIssueOperations={subIssueOperations}
+            issueServiceType={issueServiceType}
           />
         )}
     </div>

@@ -9,11 +9,13 @@ import { observer } from "mobx-react";
 // plane imports
 import { useTranslation } from "@plane/i18n";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
+import { generateWorkItemLink } from "@plane/utils";
 // components
 import type { TIssueOperations } from "@/components/issues/issue-detail";
 import { IssueParentSelect } from "@/components/issues/issue-detail/parent-select";
 // hooks
 import { useIssueDetail } from "@/hooks/store/use-issue-detail";
+import { useProject } from "@/hooks/store/use-project";
 
 type TIssueParentSelect = {
   className?: string;
@@ -37,9 +39,13 @@ export const IssueParentSelectRoot = observer(function IssueParentSelectRoot(pro
     subIssues: { setSubIssueHelpers, fetchSubIssues },
   } = useIssueDetail();
 
+  const { getProjectIdentifierById } = useProject();
+
   // derived values
   const issue = getIssueById(issueId);
   const parentIssue = issue?.parent_id ? getIssueById(issue.parent_id) : undefined;
+
+  if (parentIssue?.is_epic) return <></>;
 
   const handleParentIssue = async (_issueId: string | null = null) => {
     try {
@@ -52,17 +58,12 @@ export const IssueParentSelectRoot = observer(function IssueParentSelectRoot(pro
     }
   };
 
-  const handleRemoveSubIssue = async (
-    workspaceSlug: string,
-    projectId: string,
-    parentIssueId: string,
-    issueId: string
-  ) => {
+  const handleRemoveSubIssue = async (slug: string, projId: string, parentIssueId: string, childIssueId: string) => {
     try {
-      setSubIssueHelpers(parentIssueId, "issue_loader", issueId);
-      await removeSubIssue(workspaceSlug, projectId, parentIssueId, issueId);
-      await fetchSubIssues(workspaceSlug, projectId, parentIssueId);
-      setSubIssueHelpers(parentIssueId, "issue_loader", issueId);
+      setSubIssueHelpers(parentIssueId, "issue_loader", childIssueId);
+      await removeSubIssue(slug, projId, parentIssueId, childIssueId);
+      await fetchSubIssues(slug, projId, parentIssueId);
+      setSubIssueHelpers(parentIssueId, "issue_loader", childIssueId);
     } catch (_error) {
       setToast({
         type: TOAST_TYPE.ERROR,
@@ -72,7 +73,15 @@ export const IssueParentSelectRoot = observer(function IssueParentSelectRoot(pro
     }
   };
 
-  const workItemLink = `/${workspaceSlug}/projects/${parentIssue?.project_id}/issues/${parentIssue?.id}`;
+  const projectIdentifier = parentIssue?.project_id ? getProjectIdentifierById(parentIssue.project_id) : undefined;
+  const workItemLink = generateWorkItemLink({
+    workspaceSlug,
+    projectId: parentIssue?.project_id,
+    issueId: parentIssue?.id,
+    projectIdentifier,
+    sequenceId: parentIssue?.sequence_id,
+    isEpic: false,
+  });
 
   if (!issue) return <></>;
 

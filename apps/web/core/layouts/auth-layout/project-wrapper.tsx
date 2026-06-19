@@ -29,6 +29,7 @@ import {
 // hooks
 import { useProjectEstimates } from "@/hooks/store/estimates";
 import { useCycle } from "@/hooks/store/use-cycle";
+import { useEpic } from "@/hooks/store/use-epic";
 import { useLabel } from "@/hooks/store/use-label";
 import { useMember } from "@/hooks/store/use-member";
 import { useModule } from "@/hooks/store/use-module";
@@ -55,6 +56,7 @@ export const ProjectAuthWrapper = observer(function ProjectAuthWrapper(props: IP
   const { fetchProjectDetails } = useProject();
   const { joinProject } = useUserPermissions();
   const { fetchAllCycles } = useCycle();
+  const { fetchEpics } = useEpic();
   const { fetchModulesSlim, fetchModules } = useModule();
   const { initGantt } = useTimeLineChart(GANTT_TIMELINE_TYPE.MODULE);
   const { fetchViews } = useProjectView();
@@ -127,7 +129,11 @@ export const ProjectAuthWrapper = observer(function ProjectAuthWrapper(props: IP
   useSWR(
     PROJECT_MODULES(projectId, currentProjectRole),
     async () => {
-      await Promise.all([fetchModulesSlim(workspaceSlug, projectId), fetchModules(workspaceSlug, projectId)]);
+      await Promise.all([
+        fetchModulesSlim(workspaceSlug, projectId),
+        fetchModules(workspaceSlug, projectId),
+        fetchEpics(workspaceSlug, projectId),
+      ]);
     },
     { revalidateIfStale: false, revalidateOnFocus: false }
   );

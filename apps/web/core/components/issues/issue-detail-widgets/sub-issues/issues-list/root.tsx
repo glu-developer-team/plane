@@ -9,6 +9,7 @@ import { observer } from "mobx-react";
 // plane imports
 import { ListFilter } from "lucide-react";
 import { useTranslation } from "@plane/i18n";
+import { ALL_ISSUES } from "@plane/constants";
 import { Button } from "@plane/propel/button";
 import type { GroupByColumnTypes, TIssue, TIssueServiceType, TSubIssueOperations } from "@plane/types";
 import { EIssueServiceType, EIssuesStoreType } from "@plane/types";
@@ -61,7 +62,9 @@ export const SubIssuesListRoot = observer(function SubIssuesListRoot(props: Prop
   const filters = getSubIssueFilters(rootIssueId);
   const isRootLevel = useMemo(() => rootIssueId === parentIssueId, [rootIssueId, parentIssueId]);
   const group_by = isRootLevel ? (filters?.displayFilters?.group_by ?? null) : null;
+  const subIssueIds = subIssuesByIssueId(rootIssueId) ?? [];
   const filteredSubWorkItemsCount = (getFilteredSubWorkItems(rootIssueId, filters.filters ?? {}) ?? []).length;
+  const effectiveSubWorkItemsCount = filteredSubWorkItemsCount > 0 ? filteredSubWorkItemsCount : subIssueIds.length;
 
   const groups = getGroupByColumns({
     groupBy: group_by as GroupByColumnTypes,
@@ -75,10 +78,13 @@ export const SubIssuesListRoot = observer(function SubIssuesListRoot(props: Prop
     (groupId: string) => {
       if (isRootLevel) {
         const groupedSubIssues = getGroupedSubWorkItems(rootIssueId);
-        return groupedSubIssues?.[groupId] ?? [];
+        const groupedIds = groupedSubIssues?.[groupId] ?? [];
+        if (groupedIds.length > 0) return groupedIds;
+        if (groupId === ALL_ISSUES) return subIssuesByIssueId(parentIssueId) ?? [];
+        return groupedIds;
       }
-      const subIssueIds = subIssuesByIssueId(parentIssueId);
-      return subIssueIds ?? [];
+      const nestedSubIssueIds = subIssuesByIssueId(parentIssueId);
+      return nestedSubIssueIds ?? [];
     },
     [isRootLevel, subIssuesByIssueId, rootIssueId, getGroupedSubWorkItems, parentIssueId]
   );
@@ -87,7 +93,7 @@ export const SubIssuesListRoot = observer(function SubIssuesListRoot(props: Prop
 
   return (
     <div className="relative">
-      {isRootLevel && filteredSubWorkItemsCount === 0 ? (
+      {isRootLevel && effectiveSubWorkItemsCount === 0 ? (
         <SectionEmptyState
           title={
             !isSubWorkItems

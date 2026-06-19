@@ -127,6 +127,14 @@ from .issue.base import (
     IssueMetaEndpoint,
     IssueDetailIdentifierEndpoint,
 )
+from plane.app.views.epic import (
+    EpicArchiveViewSet,
+    EpicDetailEndpoint,
+    EpicIssuesEndpoint,
+    EpicPaginatedViewSet,
+    EpicUserDisplayPropertyEndpoint,
+    EpicViewSet,
+)
 
 from .issue.activity import IssueActivityEndpoint
 

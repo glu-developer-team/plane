@@ -86,6 +86,7 @@ export interface IIssueDetail
   isCreateIssueModalOpen: boolean;
   isIssueLinkModalOpen: boolean;
   isParentIssueModalOpen: string | null;
+  isEpicParentModalOpen: string | null;
   isDeleteIssueModalOpen: string | null;
   isArchiveIssueModalOpen: string | null;
   isRelationModalOpen: TIssueRelationModal | null;
@@ -102,6 +103,7 @@ export interface IIssueDetail
   toggleCreateIssueModal: (value: boolean) => void;
   toggleIssueLinkModal: (value: boolean) => void;
   toggleParentIssueModal: (issueId: string | null) => void;
+  toggleEpicParentModal: (issueId: string | null) => void;
   toggleDeleteIssueModal: (issueId: string | null) => void;
   toggleArchiveIssueModal: (value: string | null) => void;
   toggleRelationModal: (issueId: string | null, relationType: TIssueRelationTypes | null) => void;
@@ -148,6 +150,7 @@ export abstract class IssueDetail implements IIssueDetail {
   isCreateIssueModalOpen: boolean = false;
   isIssueLinkModalOpen: boolean = false;
   isParentIssueModalOpen: string | null = null;
+  isEpicParentModalOpen: string | null = null;
   isDeleteIssueModalOpen: string | null = null;
   isArchiveIssueModalOpen: string | null = null;
   isRelationModalOpen: TIssueRelationModal | null = null;
@@ -178,6 +181,7 @@ export abstract class IssueDetail implements IIssueDetail {
       isCreateIssueModalOpen: observable,
       isIssueLinkModalOpen: observable.ref,
       isParentIssueModalOpen: observable.ref,
+      isEpicParentModalOpen: observable.ref,
       isDeleteIssueModalOpen: observable.ref,
       isArchiveIssueModalOpen: observable.ref,
       isRelationModalOpen: observable.ref,
@@ -194,6 +198,7 @@ export abstract class IssueDetail implements IIssueDetail {
       toggleCreateIssueModal: action,
       toggleIssueLinkModal: action,
       toggleParentIssueModal: action,
+      toggleEpicParentModal: action,
       toggleDeleteIssueModal: action,
       toggleArchiveIssueModal: action,
       toggleRelationModal: action,
@@ -227,6 +232,7 @@ export abstract class IssueDetail implements IIssueDetail {
       this.isCreateIssueModalOpen ||
       this.isIssueLinkModalOpen ||
       !!this.isParentIssueModalOpen ||
+      !!this.isEpicParentModalOpen ||
       !!this.isDeleteIssueModalOpen ||
       !!this.isArchiveIssueModalOpen ||
       !!this.isRelationModalOpen?.issueId ||
@@ -248,7 +254,14 @@ export abstract class IssueDetail implements IIssueDetail {
   setPeekIssue = (peekIssue: TPeekIssue | undefined) => (this.peekIssue = peekIssue);
   toggleCreateIssueModal = (value: boolean) => (this.isCreateIssueModalOpen = value);
   toggleIssueLinkModal = (value: boolean) => (this.isIssueLinkModalOpen = value);
-  toggleParentIssueModal = (issueId: string | null) => (this.isParentIssueModalOpen = issueId);
+  toggleParentIssueModal = (issueId: string | null) => {
+    this.isParentIssueModalOpen = issueId;
+    if (issueId) this.isEpicParentModalOpen = null;
+  };
+  toggleEpicParentModal = (issueId: string | null) => {
+    this.isEpicParentModalOpen = issueId;
+    if (issueId) this.isParentIssueModalOpen = null;
+  };
   toggleDeleteIssueModal = (issueId: string | null) => (this.isDeleteIssueModalOpen = issueId);
   toggleArchiveIssueModal = (issueId: string | null) => (this.isArchiveIssueModalOpen = issueId);
   toggleRelationModal = (issueId: string | null, relationType: TIssueRelationTypes | null) =>

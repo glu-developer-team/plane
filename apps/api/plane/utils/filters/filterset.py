@@ -157,6 +157,9 @@ class IssueFilterSet(BaseFilterSet):
     subscriber_id = filters.UUIDFilter(method="filter_subscriber_id")
     subscriber_id__in = UUIDInFilter(method="filter_subscriber_id_in", lookup_expr="in")
 
+    parent_id = filters.UUIDFilter(field_name="parent_id")
+    parent_id__in = UUIDInFilter(field_name="parent_id", lookup_expr="in")
+
     class Meta:
         model = Issue
         fields = {

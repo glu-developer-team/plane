@@ -12,6 +12,7 @@ from rest_framework.response import Response
 # Module imports
 from .base import BaseAPIView
 from plane.db.models import Issue, ProjectMember, IssueRelation
+from plane.utils.epic import epic_filter, non_epic_filter
 from plane.utils.issue_search import search_issues
 
 
@@ -104,6 +105,7 @@ class IssueSearchEndpoint(BaseAPIView):
         cycle = request.query_params.get("cycle", "false")
         module = request.query_params.get("module", False)
         sub_issue = request.query_params.get("sub_issue", "false")
+        epic = request.query_params.get("epic", "false")
         target_date = request.query_params.get("target_date", True)
         issue_id = request.query_params.get("issue_id", False)
 
@@ -119,6 +121,11 @@ class IssueSearchEndpoint(BaseAPIView):
 
         if query:
             issues = self.search_issues_by_query(query, issues)
+
+        if epic == "true":
+            issues = issues.filter(epic_filter())
+        elif parent == "true":
+            issues = issues.filter(non_epic_filter())
 
         if parent == "true" and issue_id:
             issues = self.search_issues_and_excluding_parent(issues, issue_id)

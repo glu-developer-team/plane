@@ -5,7 +5,6 @@
  */
 
 import { action, makeObservable, observable } from "mobx";
-import { computedFn } from "mobx-utils";
 // plane imports
 import type { TExpressionOptions } from "@plane/constants";
 import type { EIssuesStoreType, TWorkItemFilterExpression, TWorkItemFilterProperty } from "@plane/types";
@@ -69,9 +68,12 @@ export class WorkItemFilterStore implements IWorkItemFilterStore {
    * @param entityId - The entity id.
    * @returns The filter instance.
    */
-  getFilter: IWorkItemFilterStore["getFilter"] = computedFn((entityType, entityId) =>
-    this.filters.get(this._getFilterKey(entityType, entityId))
-  );
+  getFilter: IWorkItemFilterStore["getFilter"] = (entityType, entityId) => {
+    // Track map mutations so observers re-render when a filter instance is created later
+    // (e.g. header toggle before layout HOC mounts).
+    void this.filters.size;
+    return this.filters.get(this._getFilterKey(entityType, entityId));
+  };
 
   // ------------ actions ------------
 

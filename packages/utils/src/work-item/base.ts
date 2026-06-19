@@ -111,6 +111,7 @@ export const handleIssueQueryParamsByLayout = (
     | "draft_issues"
     | "team_issues"
     | "team_project_work_items"
+    | "epics"
 ): TIssueParams[] | null => {
   const queryParams: TIssueParams[] = ["filters"];
 

@@ -257,6 +257,8 @@ class ProjectViewSet(BaseViewSet):
         if serializer.is_valid():
             serializer.save()
 
+            self._seed_epic_type_for_project(serializer.instance)
+
             # Add the user as Administrator to the project
             _ = ProjectMember.objects.create(
                 project_id=serializer.data["id"],
@@ -305,6 +307,12 @@ class ProjectViewSet(BaseViewSet):
             serializer = ProjectListSerializer(project)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @staticmethod
+    def _seed_epic_type_for_project(project):
+        from plane.utils.epic import seed_epic_type_for_project
+
+        seed_epic_type_for_project(project)
 
     def partial_update(self, request, slug, pk=None):
         # try:

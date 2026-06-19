@@ -7,14 +7,16 @@
 import { useCallback, useState } from "react";
 import { observer } from "mobx-react";
 import { ChartNoAxesColumn, SlidersHorizontal } from "lucide-react";
+import useSWR from "swr";
 // plane imports
 import { EIssueFilterType, ISSUE_STORE_TO_FILTERS_MAP } from "@plane/constants";
 import { useTranslation } from "@plane/i18n";
 import { Button } from "@plane/propel/button";
-import type { IIssueDisplayFilterOptions, IIssueDisplayProperties } from "@plane/types";
+import type { IIssueDisplayFilterOptions, IIssueDisplayProperties, TWorkItemFilterExpression } from "@plane/types";
 import { EIssueLayoutTypes, EIssuesStoreType } from "@plane/types";
 // hooks
 import { useIssues } from "@/hooks/store/use-issues";
+import { useEnsureWorkItemFilter } from "@/hooks/store/work-item-filters/use-ensure-work-item-filter";
 // plane web imports
 import type { TProject } from "@/plane-web/types";
 // local imports
@@ -55,9 +57,30 @@ export const HeaderFilters = observer(function HeaderFilters(props: Props) {
   // states
   const [analyticsModal, setAnalyticsModal] = useState(false);
   // store hooks
-  const {
-    issuesFilter: { issueFilters, updateFilters },
-  } = useIssues(storeType);
+  const { issuesFilter } = useIssues(storeType);
+  const issueFilters = projectId ? issuesFilter.getIssueFilters(projectId) : undefined;
+
+  useSWR(
+    workspaceSlug && projectId ? `HEADER_PROJECT_ISSUE_FILTERS_${workspaceSlug}_${projectId}_${storeType}` : null,
+    async () => {
+      if (workspaceSlug && projectId) {
+        await issuesFilter.fetchFilters(workspaceSlug, projectId);
+      }
+    },
+    { revalidateIfStale: false, revalidateOnFocus: false }
+  );
+
+  const handleUpdateFilterExpression = useCallback(
+    (filters: TWorkItemFilterExpression) => issuesFilter.updateFilterExpression(workspaceSlug, projectId, filters),
+    [issuesFilter, workspaceSlug, projectId]
+  );
+
+  useEnsureWorkItemFilter({
+    entityType: storeType,
+    entityId: projectId,
+    issueFilters,
+    updateFilterExpression: handleUpdateFilterExpression,
+  });
   // derived values
   const activeLayout = issueFilters?.displayFilters?.layout;
   const layoutDisplayFiltersOptions = ISSUE_STORE_TO_FILTERS_MAP[storeType]?.layoutOptions[activeLayout];
@@ -65,25 +88,25 @@ export const HeaderFilters = observer(function HeaderFilters(props: Props) {
   const handleLayoutChange = useCallback(
     (layout: EIssueLayoutTypes) => {
       if (!workspaceSlug || !projectId) return;
-      updateFilters(workspaceSlug, projectId, EIssueFilterType.DISPLAY_FILTERS, { layout: layout });
+      issuesFilter.updateFilters(workspaceSlug, projectId, EIssueFilterType.DISPLAY_FILTERS, { layout: layout });
     },
-    [workspaceSlug, projectId, updateFilters]
+    [workspaceSlug, projectId, issuesFilter]
   );
 
   const handleDisplayFilters = useCallback(
     (updatedDisplayFilter: Partial<IIssueDisplayFilterOptions>) => {
       if (!workspaceSlug || !projectId) return;
-      updateFilters(workspaceSlug, projectId, EIssueFilterType.DISPLAY_FILTERS, updatedDisplayFilter);
+      issuesFilter.updateFilters(workspaceSlug, projectId, EIssueFilterType.DISPLAY_FILTERS, updatedDisplayFilter);
     },
-    [workspaceSlug, projectId, updateFilters]
+    [workspaceSlug, projectId, issuesFilter]
   );
 
   const handleDisplayProperties = useCallback(
     (property: Partial<IIssueDisplayProperties>) => {
       if (!workspaceSlug || !projectId) return;
-      updateFilters(workspaceSlug, projectId, EIssueFilterType.DISPLAY_PROPERTIES, property);
+      issuesFilter.updateFilters(workspaceSlug, projectId, EIssueFilterType.DISPLAY_PROPERTIES, property);
     },
-    [workspaceSlug, projectId, updateFilters]
+    [workspaceSlug, projectId, issuesFilter]
   );
 
   return (

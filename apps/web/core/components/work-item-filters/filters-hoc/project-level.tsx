@@ -17,6 +17,7 @@ import { removeNillKeys } from "@/components/issues/issue-layouts/utils";
 import { CreateUpdateProjectViewModal } from "@/components/views/modal";
 // hooks
 import { useCycle } from "@/hooks/store/use-cycle";
+import { useEpic } from "@/hooks/store/use-epic";
 import { useLabel } from "@/hooks/store/use-label";
 import { useMember } from "@/hooks/store/use-member";
 import { useModule } from "@/hooks/store/use-module";
@@ -48,6 +49,7 @@ export const ProjectLevelWorkItemFiltersHOC = observer(function ProjectLevelWork
   const { data: currentUser } = useUser();
   const { allowPermissions } = useUserPermissions();
   const { getProjectCycleIds } = useCycle();
+  const { getProjectEpicIds } = useEpic();
   const { getProjectLabelIds } = useLabel();
   const {
     project: { getProjectMemberIds },
@@ -156,6 +158,7 @@ export const ProjectLevelWorkItemFiltersHOC = observer(function ProjectLevelWork
             title: "Success!",
             message: "Your view has been updated successfully.",
           });
+          return undefined;
         })
         .catch(() => {
           setToast({
@@ -163,6 +166,7 @@ export const ProjectLevelWorkItemFiltersHOC = observer(function ProjectLevelWork
             title: "Error!",
             message: "Your view could not be updated. Please try again.",
           });
+          return undefined;
         });
     },
     [viewDetails, updateView, workspaceSlug, projectId, getViewFilterPayload]
@@ -203,6 +207,7 @@ export const ProjectLevelWorkItemFiltersHOC = observer(function ProjectLevelWork
         {...props}
         workspaceSlug={workspaceSlug}
         cycleIds={getProjectCycleIds(projectId) ?? undefined}
+        epicIds={getProjectEpicIds(projectId) ?? undefined}
         labelIds={getProjectLabelIds(projectId)}
         memberIds={getProjectMemberIds(projectId, false) ?? undefined}
         moduleIds={getProjectModuleIds(projectId) ?? undefined}

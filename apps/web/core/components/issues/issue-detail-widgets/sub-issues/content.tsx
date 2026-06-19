@@ -61,7 +61,7 @@ export const SubIssuesCollapsibleContent = observer(function SubIssuesCollapsibl
   const {
     toggleCreateIssueModal,
     toggleDeleteIssueModal,
-    subIssues: { subIssueHelpersByIssueId, setSubIssueHelpers },
+    subIssues: { subIssueHelpersByIssueId, setSubIssueHelpers, subIssuesByIssueId },
   } = useIssueDetail(issueServiceType);
 
   // helpers
@@ -112,11 +112,15 @@ export const SubIssuesCollapsibleContent = observer(function SubIssuesCollapsibl
 
   const shouldRenderUpdateIssueModal = issueCrudState?.update?.toggle && issueCrudState?.update?.issue;
 
+  const subIssueIds = subIssuesByIssueId(parentIssueId);
+  const shouldShowSubIssuesList =
+    subIssueHelpers.issue_visibility.includes(parentIssueId) || (subIssueIds?.length ?? 0) > 0;
+
   return (
     <>
-      {subIssueHelpers.issue_visibility.includes(parentIssueId) && (
+      {shouldShowSubIssuesList && (
         <SubIssuesListRoot
-          storeType={EIssuesStoreType.PROJECT}
+          storeType={issueServiceType === EIssueServiceType.EPICS ? EIssuesStoreType.EPIC : EIssuesStoreType.PROJECT}
           workspaceSlug={workspaceSlug}
           projectId={projectId}
           parentIssueId={parentIssueId}

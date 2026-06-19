@@ -31,6 +31,7 @@ export const IssuePeekOverview = observer(function IssuePeekOverview(props: IWor
     embedRemoveCurrentNotification,
     is_draft = false,
     storeType: issueStoreFromProps,
+    serviceType: serviceTypeFromProps,
   } = props;
   const { t } = useTranslation();
   // router
@@ -41,22 +42,21 @@ export const IssuePeekOverview = observer(function IssuePeekOverview(props: IWor
   const {
     issues: { restoreIssue },
   } = useIssues(EIssuesStoreType.ARCHIVED);
+  const issueStoreType = useIssueStoreType();
+  const storeType = issueStoreFromProps ?? issueStoreType;
+  const issueServiceType =
+    serviceTypeFromProps ?? (storeType === EIssuesStoreType.EPIC ? EIssueServiceType.EPICS : EIssueServiceType.ISSUES);
+  const issuesStoreType =
+    issueServiceType === EIssueServiceType.EPICS ? EIssuesStoreType.EPIC : (storeType ?? EIssuesStoreType.PROJECT);
   const {
     peekIssue,
     setPeekIssue,
     issue: { fetchIssue },
     fetchActivities,
-  } = useIssueDetail();
-  const issueStoreType = useIssueStoreType();
-  const storeType = issueStoreFromProps ?? issueStoreType;
-  const { issues } = useIssues(storeType);
+  } = useIssueDetail(issueServiceType);
+  const { issues } = useIssues(issuesStoreType);
 
-  useWorkItemProperties(
-    peekIssue?.projectId,
-    peekIssue?.workspaceSlug,
-    peekIssue?.issueId,
-    storeType === EIssuesStoreType.EPIC ? EIssueServiceType.EPICS : EIssueServiceType.ISSUES
-  );
+  useWorkItemProperties(peekIssue?.projectId, peekIssue?.workspaceSlug, peekIssue?.issueId, issueServiceType);
   // state
   const [error, setError] = useState(false);
 
@@ -254,6 +254,7 @@ export const IssuePeekOverview = observer(function IssuePeekOverview(props: IWor
         embedIssue={embedIssue}
         embedRemoveCurrentNotification={embedRemoveCurrentNotification}
         issueOperations={issueOperations}
+        issueServiceType={issueServiceType}
       />
     </>
   );

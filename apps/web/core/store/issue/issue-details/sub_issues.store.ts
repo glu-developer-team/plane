@@ -157,6 +157,8 @@ export class IssueSubIssuesStore implements IIssueSubIssuesStore {
       );
     });
 
+    this.setSubIssueHelpers(`${parentIssueId}_root`, "issue_visibility", parentIssueId);
+
     this.loader = undefined;
     return response;
   };
@@ -186,14 +188,16 @@ export class IssueSubIssuesStore implements IIssueSubIssuesStore {
         });
       });
 
-      const issueIds = subIssues.map((issue) => issue.id);
+      const newSubIssueIds = subIssues.map((issue) => issue.id);
       update(this.subIssues, [parentIssueId], (issues) => {
-        if (!issues) return issueIds;
-        return concat(issues, issueIds);
+        if (!issues) return newSubIssueIds;
+        return concat(issues, newSubIssueIds);
       });
     });
 
     this.rootIssueDetailStore.rootIssueStore.issues.addIssue(subIssues);
+
+    this.setSubIssueHelpers(`${parentIssueId}_root`, "issue_visibility", parentIssueId);
 
     // update sub-issues_count of the parent issue
     set(

@@ -13,6 +13,7 @@ import { EditIcon, CloseIcon } from "@plane/propel/icons";
 // plane imports
 import { Tooltip } from "@plane/propel/tooltip";
 import { cn } from "@plane/utils";
+import type { TIssue } from "@plane/types";
 // hooks
 import { useIssueDetail } from "@/hooks/store/use-issue-detail";
 import { useProject } from "@/hooks/store/use-project";
@@ -36,6 +37,8 @@ type TIssueParentSelect = {
     issueId: string
   ) => Promise<void>;
   workItemLink: string;
+  searchEpic?: boolean;
+  emptyLabel?: string;
 };
 
 export const IssueParentSelect = observer(function IssueParentSelect(props: TIssueParentSelect) {
@@ -48,6 +51,8 @@ export const IssueParentSelect = observer(function IssueParentSelect(props: TIss
     handleParentIssue,
     handleRemoveSubIssue,
     workItemLink,
+    searchEpic = false,
+    emptyLabel,
   } = props;
   const { t } = useTranslation();
   // store hooks
@@ -55,7 +60,12 @@ export const IssueParentSelect = observer(function IssueParentSelect(props: TIss
   const {
     issue: { getIssueById },
   } = useIssueDetail();
-  const { isParentIssueModalOpen, toggleParentIssueModal } = useIssueDetail();
+  const { isParentIssueModalOpen, toggleParentIssueModal, isEpicParentModalOpen, toggleEpicParentModal } =
+    useIssueDetail();
+
+  const isModalOpen = searchEpic ? isEpicParentModalOpen === issueId : isParentIssueModalOpen === issueId;
+  const openModal = () => (searchEpic ? toggleEpicParentModal(issue.id) : toggleParentIssueModal(issue.id));
+  const closeModal = () => (searchEpic ? toggleEpicParentModal(null) : toggleParentIssueModal(null));
 
   // derived values
   const issue = getIssueById(issueId);
@@ -71,9 +81,10 @@ export const IssueParentSelect = observer(function IssueParentSelect(props: TIss
       <ParentIssuesListModal
         projectId={projectId}
         issueId={issueId}
-        isOpen={isParentIssueModalOpen === issueId}
-        handleClose={() => toggleParentIssueModal(null)}
-        onChange={(issue: any) => handleParentIssue(issue?.id)}
+        isOpen={isModalOpen}
+        handleClose={closeModal}
+        onChange={(selectedParent: TIssue | null) => handleParentIssue(selectedParent?.id)}
+        searchEpic={searchEpic}
       />
       <button
         type="button"
@@ -82,11 +93,11 @@ export const IssueParentSelect = observer(function IssueParentSelect(props: TIss
           {
             "cursor-not-allowed": disabled,
             "hover:bg-layer-transparent-hover": !disabled,
-            "bg-layer-transparent-selected": isParentIssueModalOpen,
+            "bg-layer-transparent-selected": isModalOpen,
           },
           className
         )}
-        onClick={() => toggleParentIssueModal(issue.id)}
+        onClick={openModal}
         disabled={disabled}
       >
         {issue.parent_id && parentIssue ? (
@@ -108,7 +119,9 @@ export const IssueParentSelect = observer(function IssueParentSelect(props: TIss
 
             {!disabled && (
               <Tooltip tooltipContent={t("common.remove")} position="bottom" isMobile={isMobile}>
-                <span
+                <button
+                  type="button"
+                  className="border-none bg-transparent p-0"
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -116,12 +129,12 @@ export const IssueParentSelect = observer(function IssueParentSelect(props: TIss
                   }}
                 >
                   <CloseIcon className="h-2.5 w-2.5 text-tertiary hover:text-danger-primary" />
-                </span>
+                </button>
               </Tooltip>
             )}
           </div>
         ) : (
-          <span className="text-body-xs-medium text-placeholder">{t("issue.add.parent")}</span>
+          <span className="text-body-xs-medium text-placeholder">{emptyLabel ?? t("issue.add.parent")}</span>
         )}
         {!disabled && (
           <span

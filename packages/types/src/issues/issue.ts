@@ -222,4 +222,5 @@ export interface IWorkItemPeekOverview {
   embedRemoveCurrentNotification?: () => void;
   is_draft?: boolean;
   storeType?: EIssuesStoreType;
+  serviceType?: TIssueServiceType;
 }

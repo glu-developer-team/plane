@@ -799,8 +799,15 @@ class IssueSerializer(DynamicBaseSerializer):
             "link_count",
             "is_draft",
             "archived_at",
+            "type_id",
+            "is_epic",
         ]
         read_only_fields = fields
+
+    is_epic = serializers.SerializerMethodField(read_only=True)
+
+    def get_is_epic(self, obj):
+        return bool(obj.type and obj.type.is_epic)
 
     def validate(self, data):
         if (
