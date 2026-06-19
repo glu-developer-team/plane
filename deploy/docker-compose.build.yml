@@ -1,33 +1,43 @@
 # Build overlay — merge with docker-compose.yml
 # Images are built locally on the self-hosted runner (no registry push).
 
+x-build-args: &build-args
+  DOCKER_REGISTRY: ${DOCKER_REGISTRY:-100.98.98.98:5000}
+  DOCKER_IMAGE_PREFIX: ${DOCKER_IMAGE_PREFIX:-bitaplane}
+
 services:
   web:
     build:
       context: ..
       dockerfile: apps/web/Dockerfile.web
+      args: *build-args
 
   space:
     build:
       context: ..
       dockerfile: apps/space/Dockerfile.space
+      args: *build-args
 
   admin:
     build:
       context: ..
       dockerfile: apps/admin/Dockerfile.admin
+      args: *build-args
 
   live:
     build:
       context: ..
       dockerfile: apps/live/Dockerfile.live
+      args: *build-args
 
   api:
     build:
       context: ../apps/api
       dockerfile: Dockerfile.api
+      args: *build-args
 
   proxy:
     build:
       context: ../apps/proxy
       dockerfile: Dockerfile.ce
+      args: *build-args

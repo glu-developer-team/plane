@@ -1,22 +1,12 @@
 # syntax=docker/dockerfile:1.7
-FROM node:22-alpine AS base
-
-# Setup pnpm package manager with corepack and configure global bin directory for caching
-ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PNPM_HOME/bin:$PATH"
-RUN corepack enable
+ARG DOCKER_REGISTRY=100.98.98.98:5000
+ARG DOCKER_IMAGE_PREFIX=bitaplane
+FROM ${DOCKER_REGISTRY}/${DOCKER_IMAGE_PREFIX}/node-base:22-alpine AS base
 
 # *****************************************************************************
 # STAGE 1: Prune the project
 # *****************************************************************************
 FROM base AS builder
-# Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
-RUN apk update
-RUN apk add --no-cache libc6-compat
-# Set working directory
-WORKDIR /app
-ARG TURBO_VERSION=2.9.4
-RUN corepack enable pnpm && pnpm add -g turbo@${TURBO_VERSION}
 COPY . .
 RUN turbo prune --scope=live --docker
 
@@ -25,15 +15,11 @@ RUN turbo prune --scope=live --docker
 # *****************************************************************************
 # Add lockfile and package.json's of isolated subworkspace
 FROM base AS installer
-RUN apk update
-RUN apk add --no-cache libc6-compat
-WORKDIR /app
 
 # First install dependencies (as they change less often)
 COPY .gitignore .gitignore
 COPY --from=builder /app/out/json/ .
 COPY --from=builder /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
-RUN corepack enable pnpm
 
 # Copy full directory structure before fetch to ensure all package.json files are available
 COPY --from=builder /app/out/full/ .
