@@ -6,42 +6,52 @@ from __future__ import annotations
 
 import json
 import logging
+import traceback
 
 from celery import shared_task
 
+from plane.db.models import GithubSyncJob
 from plane.utils.exception_logger import log_exception
 from plane.utils.github.pr_sync import (
+    finalize_github_webhook_log,
+    get_enabled_github_project_sync,
     handle_issue_comment_event,
     handle_pull_request_event,
+    handle_pull_request_review_event,
     push_plane_comment_to_github_prs,
+    resync_open_tagged_pull_requests,
 )
 
 logger = logging.getLogger(__name__)
 
 
 @shared_task
-def github_webhook_event_task(event_name: str, payload: dict) -> dict:
+def github_webhook_event_task(event_name: str, payload: dict, log_id: str | None = None) -> dict:
     """Process GitHub webhook events for PR linking and comment sync."""
+    result: dict = {"event": event_name, "handled": False, "reason": "unsupported_event"}
     try:
         action = payload.get("action")
         logger.info("github webhook event=%s action=%s", event_name, action)
 
         if event_name == "pull_request":
-            result = handle_pull_request_event(payload)
-            return {"event": event_name, **result}
+            result = {"event": event_name, **handle_pull_request_event(payload)}
+        elif event_name == "issue_comment":
+            result = {"event": event_name, **handle_issue_comment_event(payload)}
+        elif event_name == "pull_request_review":
+            result = {"event": event_name, **handle_pull_request_review_event(payload)}
+        else:
+            result = {"event": event_name, "action": action, "handled": False, "reason": "unsupported_event"}
 
-        if event_name == "issue_comment":
-            result = handle_issue_comment_event(payload)
-            return {"event": event_name, **result}
-
-        return {"event": event_name, "action": action, "handled": False, "reason": "unsupported_event"}
+        finalize_github_webhook_log(log_id, result)
+        return result
     except Exception as exc:
         log_exception(exc)
+        finalize_github_webhook_log(log_id, result, error=traceback.format_exc())
         raise
 
 
-def dispatch_github_webhook(event_name: str, payload: dict) -> None:
-    github_webhook_event_task.delay(event_name, json.loads(json.dumps(payload)))
+def dispatch_github_webhook(event_name: str, payload: dict, log_id: str | None = None) -> None:
+    github_webhook_event_task.delay(event_name, json.loads(json.dumps(payload)), log_id)
 
 
 @shared_task
@@ -78,4 +88,36 @@ def github_push_comment_task(comment_id: str) -> dict:
         }
     except Exception as exc:
         log_exception(exc)
+        raise
+
+
+@shared_task
+def github_resync_project_task(project_id: str, job_id: str) -> dict:
+    job = GithubSyncJob.objects.filter(id=job_id, deleted_at__isnull=True).first()
+    try:
+        if job:
+            job.status = GithubSyncJob.STATUS_RUNNING
+            job.save(update_fields=["status", "updated_at"])
+
+        sync = get_enabled_github_project_sync(project_id)
+        if not sync:
+            if job:
+                job.status = GithubSyncJob.STATUS_FAILED
+                job.error = "GitHub PR sync not configured"
+                job.save(update_fields=["status", "error", "updated_at"])
+            return {"handled": False, "reason": "sync_not_configured"}
+
+        stats = resync_open_tagged_pull_requests(sync)
+        if job:
+            job.status = GithubSyncJob.STATUS_COMPLETED
+            job.stats = stats
+            job.error = ""
+            job.save(update_fields=["status", "stats", "error", "updated_at"])
+        return {"handled": True, "stats": stats}
+    except Exception as exc:
+        log_exception(exc)
+        if job:
+            job.status = GithubSyncJob.STATUS_FAILED
+            job.error = traceback.format_exc()
+            job.save(update_fields=["status", "error", "updated_at"])
         raise

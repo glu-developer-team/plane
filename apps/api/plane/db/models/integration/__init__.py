@@ -22,4 +22,5 @@ from .github_pr import (
     GithubPRSync,
     GithubPRCommentSync,
     GithubSyncJob,
+    GithubWebhookLog,
 )

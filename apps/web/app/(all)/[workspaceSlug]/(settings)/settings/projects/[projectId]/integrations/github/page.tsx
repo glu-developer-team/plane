@@ -16,6 +16,8 @@ import { PageHead } from "@/components/core/page-title";
 import { SettingsContentWrapper } from "@/components/settings/content-wrapper";
 import { SettingsHeading } from "@/components/settings/heading";
 import { PROJECT_GITHUB_PR_SYNC } from "@/constants/github-pr-sync";
+import useIntegrationPopup from "@/hooks/use-integration-popup";
+import { useInstance } from "@/hooks/store/use-instance";
 import { useProject } from "@/hooks/store/use-project";
 import { useUserPermissions } from "@/hooks/store/user";
 import { githubPRIntegrationService } from "@/services/integration/github-pr.service";
@@ -43,6 +45,7 @@ function GithubIntegrationSettingsPage({ params }: Route.ComponentProps) {
   const [isEnabled, setIsEnabled] = useState(true);
   const [syncMode, setSyncMode] = useState<TGithubPRSyncMode>("bidirectional");
   const [isSaving, setIsSaving] = useState(false);
+  const [isResyncing, setIsResyncing] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
@@ -106,6 +109,26 @@ function GithubIntegrationSettingsPage({ params }: Route.ComponentProps) {
         title: "Error",
         message: "Failed to disconnect GitHub PR sync",
       });
+    }
+  };
+
+  const handleResync = async () => {
+    setIsResyncing(true);
+    try {
+      await githubPRIntegrationService.resync(workspaceSlug, projectId);
+      setToast({
+        type: TOAST_TYPE.SUCCESS,
+        title: t("project_settings.integrations.github.resync_started"),
+      });
+      await mutate();
+    } catch (error: any) {
+      setToast({
+        type: TOAST_TYPE.ERROR,
+        title: t("project_settings.integrations.github.resync_failed"),
+        message: error?.data?.detail || undefined,
+      });
+    } finally {
+      setIsResyncing(false);
     }
   };
 
@@ -233,6 +256,18 @@ function GithubIntegrationSettingsPage({ params }: Route.ComponentProps) {
                 ? t("project_settings.integrations.github.saving")
                 : t("project_settings.integrations.github.save")}
             </button>
+            {config?.enabled && (
+              <button
+                type="button"
+                className="text-sm rounded-md border border-subtle px-4 py-2"
+                disabled={isResyncing || !installationId.trim()}
+                onClick={handleResync}
+              >
+                {isResyncing
+                  ? t("project_settings.integrations.github.resyncing")
+                  : t("project_settings.integrations.github.resync")}
+              </button>
+            )}
             {config?.enabled && (
               <button
                 type="button"

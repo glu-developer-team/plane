@@ -14,7 +14,17 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
-from plane.db.models import GithubPRCommentSync, GithubPRSync, GithubProjectSync, Issue, IssueComment, IssueLink
+from plane.db.models import (
+    GithubPRCommentSync,
+    GithubPRSync,
+    GithubProjectSync,
+    GithubSyncJob,
+    GithubWebhookLog,
+    Issue,
+    IssueComment,
+    IssueLink,
+    State,
+)
 from plane.settings.redis import redis_instance
 from plane.utils.backlog.sync import html_to_markdown
 from plane.utils.markdown import markdown
@@ -32,9 +42,15 @@ BRACKETED_ISSUE_KEY = re.compile(r"\[(?P<identifier>[A-Za-z][A-Za-z0-9]*)-(?P<se
 BARE_ISSUE_KEY = re.compile(
     r"(?<![\w/\[])(?P<identifier>[A-Za-z][A-Za-z0-9]*)-(?P<sequence>\d+)(?![\w/\]])"
 )
+BRANCH_ISSUE_KEY = re.compile(
+    r"(?:feature|fix|bugfix|chore|hotfix)/(?P<identifier>[A-Za-z][A-Za-z0-9]*)-(?P<sequence>\d+)",
+    re.IGNORECASE,
+)
 
 PR_STATE_ACTIONS = frozenset({"opened", "edited", "closed", "reopened", "synchronize"})
 ISSUE_COMMENT_ACTIONS = frozenset({"created", "edited", "deleted"})
+REVIEW_ACTIONS = frozenset({"submitted", "dismissed", "edited"})
+GITHUB_WEBHOOK_EVENTS = frozenset({"pull_request", "issue_comment", "pull_request_review"})
 
 
 def set_github_skip_push(issue_id: str, ttl: int = GITHUB_SKIP_PUSH_TTL) -> None:
@@ -98,6 +114,26 @@ def parse_plane_issue_key(text: str | None) -> str | None:
     return f"{identifier}-{sequence}"
 
 
+def parse_plane_issue_key_from_branch(branch: str | None) -> str | None:
+    if not branch:
+        return None
+    match = BRANCH_ISSUE_KEY.search(branch.strip())
+    if not match:
+        return None
+    return f"{match.group('identifier').upper()}-{match.group('sequence')}"
+
+
+def extract_issue_key_from_pull_request(pull_request: dict[str, Any]) -> str | None:
+    issue_key = parse_plane_issue_key(pull_request.get("title") or "")
+    if issue_key:
+        return issue_key
+    issue_key = parse_plane_issue_key(pull_request.get("body") or "")
+    if issue_key:
+        return issue_key
+    head = pull_request.get("head") or {}
+    return parse_plane_issue_key_from_branch(head.get("ref") or "")
+
+
 def resolve_plane_issue(project, issue_key: str) -> Issue | None:
     """Resolve a Plane issue key within the configured project."""
     if not issue_key or "-" not in issue_key:
@@ -134,6 +170,36 @@ def derive_pr_state(pull_request: dict[str, Any]) -> str:
         return "merged"
     state = (pull_request.get("state") or "open").lower()
     return state if state in {"open", "closed"} else "open"
+
+
+def get_state_for_pr_state(sync: GithubProjectSync, pr_state: str) -> State | None:
+    config = sync.config or {}
+    state_map = config.get("state_map") or {}
+    mapped_id = state_map.get(pr_state)
+    if mapped_id:
+        return State.objects.filter(
+            id=mapped_id,
+            project_id=sync.project_id,
+            deleted_at__isnull=True,
+        ).first()
+    if pr_state == "merged":
+        return (
+            State.objects.filter(project_id=sync.project_id, group="completed", deleted_at__isnull=True)
+            .order_by("sequence")
+            .first()
+        )
+    return None
+
+
+def apply_github_pr_state_to_issue(issue: Issue, pr_state: str, sync: GithubProjectSync) -> bool:
+    if pr_state not in {"merged", "closed"}:
+        return False
+    target_state = get_state_for_pr_state(sync, pr_state)
+    if not target_state or issue.state_id == target_state.id:
+        return False
+    issue.state_id = target_state.id
+    issue.save(update_fields=["state_id", "updated_at"], disable_auto_set_user=True)
+    return True
 
 
 def _pr_link_title(pull_request: dict[str, Any]) -> str:
@@ -319,9 +385,7 @@ def handle_pull_request_event(payload: dict[str, Any]) -> dict[str, Any]:
         deleted_at__isnull=True,
     ).first()
 
-    issue_key = parse_plane_issue_key(pull_request.get("title") or "")
-    if not issue_key:
-        issue_key = parse_plane_issue_key(pull_request.get("body") or "")
+    issue_key = extract_issue_key_from_pull_request(pull_request)
 
     if not issue_key and not existing_sync:
         return {"handled": False, "reason": "no_issue_tag", "action": action}
@@ -386,6 +450,9 @@ def handle_pull_request_event(payload: dict[str, Any]) -> dict[str, Any]:
                 message_html=_state_change_comment_html(pull_request, "merged"),
                 external_id=f"pr-state-{pr_number}-merged-{action}",
             )
+
+        if new_state in {"merged", "closed"} and previous_state != new_state:
+            apply_github_pr_state_to_issue(issue, new_state, sync)
 
     return {
         "handled": True,
@@ -722,3 +789,194 @@ def enqueue_github_push_comment(comment_id: str) -> None:
     from plane.bgtasks.github_pr_sync_task import github_push_comment_task
 
     github_push_comment_task.delay(str(comment_id))
+
+
+def summarize_github_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    summary: dict[str, Any] = {"action": payload.get("action")}
+    pull_request = payload.get("pull_request") or {}
+    if pull_request.get("number"):
+        summary["pr_number"] = pull_request.get("number")
+    issue = payload.get("issue") or {}
+    if issue.get("number"):
+        summary["issue_number"] = issue.get("number")
+    comment = payload.get("comment") or {}
+    if comment.get("id"):
+        summary["comment_id"] = comment.get("id")
+    review = payload.get("review") or {}
+    if review.get("id"):
+        summary["review_id"] = review.get("id")
+        summary["review_state"] = review.get("state")
+    repository = payload.get("repository") or {}
+    owner = ((repository.get("owner") or {}).get("login") or "").strip()
+    repo_name = (repository.get("name") or "").strip()
+    if owner and repo_name:
+        summary["repo"] = f"{owner}/{repo_name}"
+    return summary
+
+
+def create_github_webhook_log(event_name: str, payload: dict[str, Any], delivery_id: str = "") -> GithubWebhookLog:
+    repository = payload.get("repository") or {}
+    return GithubWebhookLog.objects.create(
+        delivery_id=(delivery_id or "")[:64],
+        event_name=event_name[:64],
+        action=((payload.get("action") or "")[:64]),
+        repo_owner=(((repository.get("owner") or {}).get("login") or "")[:255]),
+        repo_name=((repository.get("name") or "")[:255]),
+        payload_summary=summarize_github_payload(payload),
+    )
+
+
+def finalize_github_webhook_log(log_id: str | None, result: dict[str, Any], error: str = "") -> None:
+    if not log_id:
+        return
+    GithubWebhookLog.objects.filter(id=log_id).update(
+        handled=bool(result.get("handled")),
+        result=result,
+        error=error or "",
+        updated_at=timezone.now(),
+    )
+
+
+def _review_activity_html(pull_request: dict[str, Any], review: dict[str, Any], action: str) -> str:
+    number = pull_request.get("number")
+    url = html.escape(pull_request.get("html_url") or "")
+    login = html.escape(((review.get("user") or {}).get("login") or "github-user"))
+    review_state = (review.get("state") or "").lower()
+    if action == "dismissed":
+        verb = "dismissed a review on"
+    elif review_state == "approved":
+        verb = "approved"
+    elif review_state == "changes_requested":
+        verb = "requested changes on"
+    else:
+        verb = "reviewed"
+    return (
+        f'<p><strong>@{login}</strong> {verb} GitHub pull request '
+        f'<a href="{url}" target="_blank" rel="noopener noreferrer">#{number}</a>.</p>'
+    )
+
+
+def handle_pull_request_review_event(payload: dict[str, Any]) -> dict[str, Any]:
+    action = payload.get("action") or ""
+    if action not in REVIEW_ACTIONS:
+        return {"handled": False, "reason": "unsupported_action", "action": action}
+
+    repository = payload.get("repository") or {}
+    owner = ((repository.get("owner") or {}).get("login") or "").strip()
+    repo_name = (repository.get("name") or "").strip()
+    sync = get_github_project_sync_by_repo(owner, repo_name)
+    if not sync:
+        return {"handled": False, "reason": "repo_not_configured", "action": action}
+
+    pull_request = payload.get("pull_request") or {}
+    review = payload.get("review") or {}
+    pr_number = pull_request.get("number")
+    review_id = review.get("id")
+    if not pr_number or not review_id:
+        return {"handled": False, "reason": "invalid_payload", "action": action}
+
+    pr_sync = GithubPRSync.objects.filter(
+        project_id=sync.project_id,
+        pr_number=pr_number,
+        deleted_at__isnull=True,
+    ).select_related("issue").first()
+    if not pr_sync:
+        return {"handled": False, "reason": "pr_not_linked", "action": action}
+
+    sync.last_webhook_at = timezone.now()
+    sync.save(update_fields=["last_webhook_at", "updated_at"], disable_auto_set_user=True)
+
+    if action == "edited":
+        return {"handled": False, "reason": "review_edit_ignored", "action": action, "pr_number": pr_number}
+
+    comment = post_pr_activity_comment(
+        pr_sync.issue,
+        sync=sync,
+        message_html=_review_activity_html(pull_request, review, action),
+        external_id=f"pr-review-{pr_number}-{review_id}-{action}",
+    )
+    if not comment:
+        return {
+            "handled": False,
+            "reason": "duplicate_review_event",
+            "action": action,
+            "pr_number": pr_number,
+            "review_id": review_id,
+        }
+
+    return {
+        "handled": True,
+        "action": action,
+        "pr_number": pr_number,
+        "review_id": review_id,
+        "issue_id": str(pr_sync.issue_id),
+        "comment_id": str(comment.id),
+    }
+
+
+def resync_open_tagged_pull_requests(sync: GithubProjectSync) -> dict[str, Any]:
+    from plane.utils.github.client import GitHubClient
+
+    if not sync.installation_id:
+        raise ValueError("GitHub App installation_id is required for resync")
+
+    client = GitHubClient(sync.installation_id)
+    pulls = client.list_pulls(sync.repo_owner, sync.repo_name, state="open")
+    stats = {"scanned": 0, "linked": 0, "skipped": 0, "errors": 0}
+
+    for pull_request in pulls:
+        stats["scanned"] += 1
+        payload = {
+            "action": "opened",
+            "repository": {
+                "name": sync.repo_name,
+                "owner": {"login": sync.repo_owner},
+            },
+            "pull_request": pull_request,
+        }
+        try:
+            result = handle_pull_request_event(payload)
+            if result.get("handled"):
+                stats["linked"] += 1
+            else:
+                stats["skipped"] += 1
+        except Exception:
+            logger.exception("github pr resync failed for PR #%s", pull_request.get("number"))
+            stats["errors"] += 1
+
+    sync.last_sync_completed_at = timezone.now()
+    sync.save(update_fields=["last_sync_completed_at", "updated_at"], disable_auto_set_user=True)
+    return stats
+
+
+def enqueue_github_resync(project_id) -> tuple[GithubSyncJob | None, bool]:
+    sync = get_enabled_github_project_sync(project_id)
+    if not sync or not sync.installation_id:
+        return None, False
+
+    active = (
+        GithubSyncJob.objects.filter(
+            project_id=project_id,
+            scope=GithubSyncJob.SCOPE_PROJECT,
+            status__in=[GithubSyncJob.STATUS_PENDING, GithubSyncJob.STATUS_RUNNING],
+            deleted_at__isnull=True,
+        )
+        .order_by("-created_at")
+        .first()
+    )
+    if active:
+        return active, True
+
+    job = GithubSyncJob.objects.create(
+        project_id=sync.project_id,
+        workspace_id=sync.workspace_id,
+        scope=GithubSyncJob.SCOPE_PROJECT,
+        status=GithubSyncJob.STATUS_PENDING,
+        created_by_id=sync.created_by_id,
+    )
+    from plane.bgtasks.github_pr_sync_task import github_resync_project_task
+
+    result = github_resync_project_task.delay(str(project_id), str(job.id))
+    job.celery_task_id = result.id or ""
+    job.save(update_fields=["celery_task_id", "updated_at"])
+    return job, False

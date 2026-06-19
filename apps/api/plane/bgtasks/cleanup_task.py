@@ -477,3 +477,14 @@ def delete_webhook_logs():
         task_name="Webhook Log",
         collection_name="webhook_logs",
     )
+
+
+@shared_task
+def delete_github_webhook_logs():
+    """Delete GitHub PR connector webhook debug logs after retention window."""
+    from plane.db.models import GithubWebhookLog
+
+    cutoff_days = int(os.environ.get("GITHUB_WEBHOOK_LOG_RETENTION_DAYS", 7))
+    cutoff_time = timezone.now() - timedelta(days=cutoff_days)
+    deleted_count, _ = GithubWebhookLog.all_objects.filter(created_at__lte=cutoff_time).delete()
+    logger.info("Deleted %s GitHub webhook logs older than %s days", deleted_count, cutoff_days)

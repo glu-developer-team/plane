@@ -51,6 +51,31 @@ export class GithubPRIntegrationService extends APIService {
         throw error?.response;
       });
   }
+
+  async resync(
+    workspaceSlug: string,
+    projectId: string
+  ): Promise<{ job_id: string; status: string; deduplicated: boolean }> {
+    return this.post(`/api/workspaces/${workspaceSlug}/projects/${projectId}/github-pr-sync/resync/`, {})
+      .then((response) => response?.data)
+      .catch((error) => {
+        throw error?.response;
+      });
+  }
+
+  async getResyncStatus(
+    workspaceSlug: string,
+    projectId: string,
+    jobId: string
+  ): Promise<{ id: string; status: string; stats: Record<string, number>; error: string }> {
+    return this.get(
+      `/api/workspaces/${workspaceSlug}/projects/${projectId}/github-pr-sync/resync/status/?job_id=${jobId}`
+    )
+      .then((response) => response?.data)
+      .catch((error) => {
+        throw error?.response;
+      });
+  }
 }
 
 export const githubPRIntegrationService = new GithubPRIntegrationService();

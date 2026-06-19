@@ -9,10 +9,13 @@ from plane.db.models import GithubPRCommentSync, GithubPRSync, GithubProjectSync
 from plane.utils.github.pr_sync import (
     derive_pr_state,
     enqueue_github_push_comment,
+    extract_issue_key_from_pull_request,
     github_comment_body_to_html,
     handle_issue_comment_event,
     handle_pull_request_event,
+    handle_pull_request_review_event,
     parse_plane_issue_key,
+    parse_plane_issue_key_from_branch,
     plane_comment_to_github_body,
     push_plane_comment_to_github_prs,
     resolve_plane_issue,
@@ -101,6 +104,13 @@ class TestParsePlaneIssueKey:
 
     def test_bare_key(self):
         assert parse_plane_issue_key("See PLANE-456 for context") == "PLANE-456"
+
+    def test_branch_key(self):
+        assert parse_plane_issue_key_from_branch("feature/PLANE-42-add-sync") == "PLANE-42"
+
+    def test_extract_from_branch(self):
+        pull_request = {"title": "Untagged", "body": "", "head": {"ref": "fix/PLANE-99-hotfix"}}
+        assert extract_issue_key_from_pull_request(pull_request) == "PLANE-99"
 
     def test_no_key(self):
         assert parse_plane_issue_key("No tag here") is None
@@ -328,3 +338,35 @@ class TestPlaneCommentPushToGithub:
         with patch("plane.bgtasks.github_pr_sync_task.github_push_comment_task.delay") as mock_delay:
             enqueue_github_push_comment(str(comment.id))
             mock_delay.assert_called_once_with(str(comment.id))
+
+
+@pytest.mark.django_db
+class TestGithubEnhancements:
+    def test_merged_pr_moves_issue_to_completed_state(self, github_sync, issue, mock_redis):
+        completed = State.objects.create(name="Done", project=issue.project, group="completed", sequence=2000)
+        handle_pull_request_event(_pull_request_payload())
+        result = handle_pull_request_event(
+            _pull_request_payload(action="closed", state="closed", merged=True)
+        )
+
+        assert result["handled"] is True
+        issue.refresh_from_db()
+        assert issue.state_id == completed.id
+
+    def test_review_posts_activity_comment(self, github_sync, issue, mock_redis):
+        handle_pull_request_event(_pull_request_payload())
+        payload = {
+            "action": "submitted",
+            "repository": {"name": "plane", "owner": {"login": "glu-developer-team"}},
+            "pull_request": {
+                "number": 42,
+                "html_url": "https://github.com/glu-developer-team/plane/pull/42",
+            },
+            "review": {"id": 555, "state": "approved", "user": {"login": "reviewer"}},
+        }
+        result = handle_pull_request_review_event(payload)
+
+        assert result["handled"] is True
+        comment = IssueComment.objects.get(issue=issue, external_id="pr-review-42-555-submitted")
+        assert "approved" in comment.comment_html
+        assert "reviewer" in comment.comment_html

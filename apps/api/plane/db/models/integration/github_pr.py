@@ -4,6 +4,7 @@
 
 from django.db import models
 
+from plane.db.models.base import BaseModel
 from plane.db.models.project import ProjectBaseModel
 
 
@@ -99,3 +100,24 @@ class GithubSyncJob(ProjectBaseModel):
 
     def __str__(self):
         return f"{self.scope} sync {self.status}"
+
+
+class GithubWebhookLog(BaseModel):
+    delivery_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    event_name = models.CharField(max_length=64, db_index=True)
+    action = models.CharField(max_length=64, blank=True, default="")
+    repo_owner = models.CharField(max_length=255, blank=True, default="")
+    repo_name = models.CharField(max_length=255, blank=True, default="")
+    handled = models.BooleanField(default=False)
+    result = models.JSONField(default=dict)
+    error = models.TextField(blank=True, default="")
+    payload_summary = models.JSONField(default=dict)
+
+    class Meta:
+        verbose_name = "Github Webhook Log"
+        verbose_name_plural = "Github Webhook Logs"
+        db_table = "github_webhook_logs"
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"{self.event_name}/{self.action} handled={self.handled}"

@@ -115,3 +115,21 @@ class GitHubClient:
             json={"body": body},
         )
         return response.json()
+
+    def list_pulls(self, owner: str, repo: str, *, state: str = "open", per_page: int = 100) -> list[dict]:
+        pulls: list[dict] = []
+        page = 1
+        while True:
+            response = self.request(
+                "GET",
+                f"/repos/{owner}/{repo}/pulls",
+                params={"state": state, "per_page": per_page, "page": page},
+            )
+            batch = response.json()
+            if not batch:
+                break
+            pulls.extend(batch)
+            if len(batch) < per_page:
+                break
+            page += 1
+        return pulls

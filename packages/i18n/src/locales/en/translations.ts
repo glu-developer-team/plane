@@ -1908,6 +1908,11 @@ export default {
         connect: "Connect GitHub",
         connecting: "Connecting...",
         connect_unconfigured: "Configure GITHUB_APP_NAME on the instance before connecting.",
+        resync: "Resync open PRs",
+        resyncing: "Resyncing...",
+        resync_started: "Resync started",
+        resync_completed: "Resync completed",
+        resync_failed: "Resync failed",
       },
     },
     empty_state: {

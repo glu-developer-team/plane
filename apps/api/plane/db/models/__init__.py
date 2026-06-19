@@ -36,6 +36,7 @@ from .integration import (
     GithubPRSync,
     GithubPRCommentSync,
     GithubSyncJob,
+    GithubWebhookLog,
 )
 from .issue import (
     CommentReaction,
