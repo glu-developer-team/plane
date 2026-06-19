@@ -24,6 +24,7 @@ from plane.bgtasks.issue_activities_task import issue_activity
 from plane.utils.host import base_host
 from plane.bgtasks.webhook_task import model_activity
 from plane.utils.backlog.sync import enqueue_backlog_push_comment
+from plane.utils.github.pr_sync import enqueue_github_push_comment
 
 
 class IssueCommentViewSet(BaseViewSet):
@@ -105,6 +106,7 @@ class IssueCommentViewSet(BaseViewSet):
                 origin=base_host(request=request, is_app=True),
             )
             enqueue_backlog_push_comment(str(serializer.data["id"]))
+            enqueue_github_push_comment(str(serializer.data["id"]))
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

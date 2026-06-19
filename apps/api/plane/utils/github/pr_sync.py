@@ -14,11 +14,15 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
-from plane.db.models import GithubPRSync, GithubProjectSync, Issue, IssueComment, IssueLink
+from plane.db.models import GithubPRCommentSync, GithubPRSync, GithubProjectSync, Issue, IssueComment, IssueLink
+from plane.settings.redis import redis_instance
+from plane.utils.backlog.sync import html_to_markdown
+from plane.utils.markdown import markdown
 
 logger = logging.getLogger(__name__)
 
 GITHUB_PR_EXTERNAL_SOURCE = "github_pr"
+GITHUB_SKIP_PUSH_TTL = 60
 
 SYNC_MODE_GITHUB_TO_PLANE = "github_to_plane"
 SYNC_MODE_BIDIRECTIONAL = "bidirectional"
@@ -30,6 +34,15 @@ BARE_ISSUE_KEY = re.compile(
 )
 
 PR_STATE_ACTIONS = frozenset({"opened", "edited", "closed", "reopened", "synchronize"})
+ISSUE_COMMENT_ACTIONS = frozenset({"created", "edited", "deleted"})
+
+
+def set_github_skip_push(issue_id: str, ttl: int = GITHUB_SKIP_PUSH_TTL) -> None:
+    redis_instance().set(f"github_skip_push:{issue_id}", "1", ex=ttl)
+
+
+def should_github_skip_push(issue_id: str) -> bool:
+    return bool(redis_instance().get(f"github_skip_push:{issue_id}"))
 
 
 def get_sync_mode(sync) -> str:
@@ -189,7 +202,7 @@ def post_pr_activity_comment(
     ).exists():
         return None
 
-    return IssueComment.objects.create(
+    comment = IssueComment.objects.create(
         issue_id=issue.id,
         project_id=issue.project_id,
         workspace_id=issue.workspace_id,
@@ -200,6 +213,8 @@ def post_pr_activity_comment(
         actor_id=sync.created_by_id,
         created_by_id=sync.created_by_id,
     )
+    set_github_skip_push(str(issue.id))
+    return comment
 
 
 def _linked_comment_html(pull_request: dict[str, Any]) -> str:
@@ -381,3 +396,329 @@ def handle_pull_request_event(payload: dict[str, Any]) -> dict[str, Any]:
         "created": created,
         "pr_state": new_state,
     }
+
+
+def github_comment_body_to_html(body: str | None) -> str:
+    text = (body or "").strip()
+    if not text:
+        return "<p></p>"
+    rendered = markdown(text)
+    if rendered and rendered.strip():
+        return rendered.strip()
+    return f"<p>{html.escape(text)}</p>"
+
+
+def github_comment_to_html(body: str | None, user: dict[str, Any] | None) -> str:
+    login = html.escape((user or {}).get("login") or "github-user")
+    content = github_comment_body_to_html(body)
+    return f'<p><strong>@{login}</strong> (GitHub):</p>{content}'
+
+
+def _get_pr_sync_for_issue_comment(
+    sync: GithubProjectSync,
+    issue_payload: dict[str, Any],
+) -> GithubPRSync | None:
+    if not issue_payload.get("pull_request"):
+        return None
+
+    pr_number = issue_payload.get("number")
+    if not pr_number:
+        return None
+
+    return (
+        GithubPRSync.objects.filter(
+            project_id=sync.project_id,
+            pr_number=pr_number,
+            deleted_at__isnull=True,
+        )
+        .select_related("issue")
+        .first()
+    )
+
+
+def _find_github_comment_sync(pr_sync: GithubPRSync, github_comment_id: int) -> GithubPRCommentSync | None:
+    return (
+        GithubPRCommentSync.objects.filter(
+            pr_sync=pr_sync,
+            github_comment_id=github_comment_id,
+            deleted_at__isnull=True,
+        )
+        .select_related("comment")
+        .first()
+    )
+
+
+def sync_github_comment_created(
+    sync: GithubProjectSync,
+    pr_sync: GithubPRSync,
+    comment_payload: dict[str, Any],
+) -> IssueComment | None:
+    github_comment_id = comment_payload.get("id")
+    if not github_comment_id:
+        return None
+
+    if _find_github_comment_sync(pr_sync, github_comment_id):
+        return None
+
+    if IssueComment.objects.filter(
+        external_source=GITHUB_PR_EXTERNAL_SOURCE,
+        external_id=str(github_comment_id),
+        deleted_at__isnull=True,
+    ).exists():
+        return None
+
+    if should_github_skip_push(str(pr_sync.issue_id)):
+        return None
+
+    comment_html = github_comment_to_html(comment_payload.get("body"), comment_payload.get("user"))
+    created_at = parse_github_datetime(comment_payload.get("created_at")) or timezone.now()
+
+    set_github_skip_push(str(pr_sync.issue_id))
+    comment = IssueComment(
+        project_id=sync.project_id,
+        workspace_id=sync.workspace_id,
+        issue_id=pr_sync.issue_id,
+        actor_id=sync.created_by_id,
+        comment_html=comment_html,
+        access="EXTERNAL",
+        external_source=GITHUB_PR_EXTERNAL_SOURCE,
+        external_id=str(github_comment_id),
+        created_by_id=sync.created_by_id,
+        created_at=created_at,
+        updated_at=created_at,
+    )
+    comment.save()
+
+    GithubPRCommentSync.objects.create(
+        project_id=sync.project_id,
+        workspace_id=sync.workspace_id,
+        comment=comment,
+        pr_sync=pr_sync,
+        github_comment_id=github_comment_id,
+        created_by_id=sync.created_by_id,
+    )
+    return comment
+
+
+def sync_github_comment_edited(
+    pr_sync: GithubPRSync,
+    comment_payload: dict[str, Any],
+) -> IssueComment | None:
+    github_comment_id = comment_payload.get("id")
+    if not github_comment_id:
+        return None
+
+    comment_sync = _find_github_comment_sync(pr_sync, github_comment_id)
+    if not comment_sync or not comment_sync.comment:
+        return None
+
+    comment = comment_sync.comment
+    comment_html = github_comment_to_html(comment_payload.get("body"), comment_payload.get("user"))
+    updated_at = parse_github_datetime(comment_payload.get("updated_at")) or timezone.now()
+
+    set_github_skip_push(str(pr_sync.issue_id))
+    comment.comment_html = comment_html
+    comment.updated_at = updated_at
+    comment.save(update_fields=["comment_html", "updated_at"])
+    return comment
+
+
+def sync_github_comment_deleted(pr_sync: GithubPRSync, comment_payload: dict[str, Any]) -> bool:
+    github_comment_id = comment_payload.get("id")
+    if not github_comment_id:
+        return False
+
+    comment_sync = _find_github_comment_sync(pr_sync, github_comment_id)
+    if not comment_sync:
+        return False
+
+    set_github_skip_push(str(pr_sync.issue_id))
+    if comment_sync.comment:
+        comment_sync.comment.delete()
+    comment_sync.delete()
+    return True
+
+
+def handle_issue_comment_event(payload: dict[str, Any]) -> dict[str, Any]:
+    action = payload.get("action") or ""
+    if action not in ISSUE_COMMENT_ACTIONS:
+        return {"handled": False, "reason": "unsupported_action", "action": action}
+
+    repository = payload.get("repository") or {}
+    owner = ((repository.get("owner") or {}).get("login") or "").strip()
+    repo_name = (repository.get("name") or "").strip()
+    sync = get_github_project_sync_by_repo(owner, repo_name)
+    if not sync:
+        return {"handled": False, "reason": "repo_not_configured", "action": action}
+
+    issue_payload = payload.get("issue") or {}
+    pr_sync = _get_pr_sync_for_issue_comment(sync, issue_payload)
+    if not pr_sync:
+        return {"handled": False, "reason": "pr_not_linked", "action": action}
+
+    comment_payload = payload.get("comment") or {}
+    github_comment_id = comment_payload.get("id")
+    if not github_comment_id:
+        return {"handled": False, "reason": "invalid_payload", "action": action}
+
+    sync.last_webhook_at = timezone.now()
+    sync.save(update_fields=["last_webhook_at", "updated_at"], disable_auto_set_user=True)
+
+    if action == "created":
+        comment = sync_github_comment_created(sync, pr_sync, comment_payload)
+        if not comment:
+            return {
+                "handled": False,
+                "reason": "comment_skipped",
+                "action": action,
+                "github_comment_id": github_comment_id,
+            }
+        return {
+            "handled": True,
+            "action": action,
+            "github_comment_id": github_comment_id,
+            "comment_id": str(comment.id),
+            "issue_id": str(pr_sync.issue_id),
+            "pr_number": pr_sync.pr_number,
+        }
+
+    if action == "edited":
+        comment = sync_github_comment_edited(pr_sync, comment_payload)
+        if not comment:
+            return {
+                "handled": False,
+                "reason": "comment_not_found",
+                "action": action,
+                "github_comment_id": github_comment_id,
+            }
+        return {
+            "handled": True,
+            "action": action,
+            "github_comment_id": github_comment_id,
+            "comment_id": str(comment.id),
+            "issue_id": str(pr_sync.issue_id),
+            "pr_number": pr_sync.pr_number,
+        }
+
+    deleted = sync_github_comment_deleted(pr_sync, comment_payload)
+    return {
+        "handled": deleted,
+        "action": action,
+        "github_comment_id": github_comment_id,
+        "issue_id": str(pr_sync.issue_id),
+        "pr_number": pr_sync.pr_number,
+        "reason": None if deleted else "comment_not_found",
+    }
+
+
+def plane_comment_to_github_body(comment: IssueComment) -> str:
+    content = html_to_markdown(comment.comment_html)
+    if not content:
+        content = "(empty comment)"
+
+    actor = comment.actor
+    if actor:
+        label = (getattr(actor, "display_name", None) or actor.email or "Plane user").strip()
+        if label:
+            return f"**{label}** (Plane):\n\n{content}"
+    return content
+
+
+def get_linked_github_prs_for_issue(issue_id, project_id) -> list[GithubPRSync]:
+    return list(
+        GithubPRSync.objects.filter(
+            issue_id=issue_id,
+            project_id=project_id,
+            deleted_at__isnull=True,
+        ).order_by("-updated_at")
+    )
+
+
+def push_plane_comment_to_github(
+    comment: IssueComment,
+    sync: GithubProjectSync,
+    pr_sync: GithubPRSync,
+    *,
+    client,
+) -> GithubPRCommentSync | None:
+    if GithubPRCommentSync.objects.filter(
+        comment_id=comment.id,
+        pr_sync_id=pr_sync.id,
+        deleted_at__isnull=True,
+    ).exists():
+        return None
+
+    if not sync.installation_id:
+        logger.info("github pr sync: missing installation_id for project %s", sync.project_id)
+        return None
+
+    body = plane_comment_to_github_body(comment)
+    set_github_skip_push(str(comment.issue_id))
+
+    created = client.post_issue_comment(
+        sync.repo_owner,
+        sync.repo_name,
+        pr_sync.pr_number,
+        body,
+    )
+    github_comment_id = created.get("id")
+    if not github_comment_id:
+        raise ValueError("GitHub comment response missing id")
+
+    return GithubPRCommentSync.objects.create(
+        project_id=sync.project_id,
+        workspace_id=sync.workspace_id,
+        comment=comment,
+        pr_sync=pr_sync,
+        github_comment_id=github_comment_id,
+        created_by_id=sync.created_by_id,
+    )
+
+
+def push_plane_comment_to_github_prs(comment: IssueComment, sync: GithubProjectSync) -> list[GithubPRCommentSync]:
+    from plane.utils.github.client import GitHubClient
+
+    if not is_github_push_enabled(sync):
+        return []
+    if not sync.installation_id:
+        return []
+
+    pr_syncs = get_linked_github_prs_for_issue(comment.issue_id, comment.project_id)
+    if not pr_syncs:
+        return []
+
+    client = GitHubClient(sync.installation_id)
+    pushed: list[GithubPRCommentSync] = []
+    for pr_sync in pr_syncs:
+        try:
+            record = push_plane_comment_to_github(comment, sync, pr_sync, client=client)
+            if record:
+                pushed.append(record)
+        except Exception as exc:
+            logger.exception(
+                "github pr sync: failed to push comment %s to PR #%s: %s",
+                comment.id,
+                pr_sync.pr_number,
+                exc,
+            )
+    return pushed
+
+
+def enqueue_github_push_comment(comment_id: str) -> None:
+    comment = IssueComment.objects.filter(id=comment_id, deleted_at__isnull=True).select_related("issue", "actor").first()
+    if not comment:
+        return
+
+    sync = get_enabled_github_project_sync(comment.project_id)
+    if not sync or not is_github_push_enabled(sync):
+        return
+    if comment.external_source == GITHUB_PR_EXTERNAL_SOURCE:
+        return
+    if should_github_skip_push(str(comment.issue_id)):
+        return
+    if not get_linked_github_prs_for_issue(comment.issue_id, comment.project_id):
+        return
+
+    from plane.bgtasks.github_pr_sync_task import github_push_comment_task
+
+    github_push_comment_task.delay(str(comment_id))
