@@ -18,6 +18,7 @@ import { WorkItemFiltersRow } from "@/components/work-item-filters/filters-row";
 import { useIssues } from "@/hooks/store/use-issues";
 import { IssuesStoreContext } from "@/hooks/use-issue-layout-store";
 // local imports
+import { ModuleIssueListPollBridge } from "@/components/issues/issue-list-poll-bridge";
 import { IssuePeekOverview } from "../../peek-overview";
 import { ModuleCalendarLayout } from "../calendar/roots/module-root";
 import { BaseGanttRoot } from "../gantt";
@@ -69,6 +70,7 @@ export const ModuleLayoutRoot = observer(function ModuleLayoutRoot() {
   if (!workspaceSlug || !projectId || !moduleId || !workItemFilters) return <></>;
   return (
     <IssuesStoreContext.Provider value={EIssuesStoreType.MODULE}>
+      <ModuleIssueListPollBridge workspaceSlug={workspaceSlug} projectId={projectId} moduleId={moduleId} />
       <ProjectLevelWorkItemFiltersHOC
         enableSaveView
         entityType={EIssuesStoreType.MODULE}
