@@ -10,7 +10,7 @@ import { cn } from "@plane/utils";
 
 export type THeadingComponentProps = {
   marking: IMarking;
-  onClick: (event: React.MouseEvent<HTMLButtonElement, MouseEvent>) => void;
+  onClick: (event: React.MouseEvent<HTMLAnchorElement, MouseEvent>) => void;
 };
 
 const COMMON_CLASSNAME =
@@ -18,24 +18,24 @@ const COMMON_CLASSNAME =
 
 export function OutlineHeading1({ marking, onClick }: THeadingComponentProps) {
   return (
-    <button type="button" onClick={onClick} className={cn(COMMON_CLASSNAME, "pl-1 text-13")}>
+    <a href={`#${marking.slug}`} onClick={onClick} className={cn(COMMON_CLASSNAME, "pl-1 text-13")}>
       {marking.text}
-    </button>
+    </a>
   );
 }
 
 export function OutlineHeading2({ marking, onClick }: THeadingComponentProps) {
   return (
-    <button type="button" onClick={onClick} className={cn(COMMON_CLASSNAME, "pl-2 text-11")}>
+    <a href={`#${marking.slug}`} onClick={onClick} className={cn(COMMON_CLASSNAME, "pl-2 text-11")}>
       {marking.text}
-    </button>
+    </a>
   );
 }
 
 export function OutlineHeading3({ marking, onClick }: THeadingComponentProps) {
   return (
-    <button type="button" onClick={onClick} className={cn(COMMON_CLASSNAME, "pl-4 text-11")}>
+    <a href={`#${marking.slug}`} onClick={onClick} className={cn(COMMON_CLASSNAME, "pl-4 text-11")}>
       {marking.text}
-    </button>
+    </a>
   );
 }
