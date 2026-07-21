@@ -55,4 +55,6 @@ export type IMarking = {
   level: number;
   text: string;
   sequence: number;
+  /** URL hash fragment for outline / deep-link anchors. */
+  slug: string;
 };

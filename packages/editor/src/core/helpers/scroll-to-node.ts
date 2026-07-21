@@ -59,3 +59,10 @@ export function scrollSummary(editor: Editor, marking: IMarking) {
     scrollToNode(editor, pos);
   }
 }
+
+export function scrollToHeadingBySlug(editor: Editor, slug: string): boolean {
+  const marking = editor.storage.headingsList?.headings?.find((heading: IMarking) => heading.slug === slug);
+  if (!marking) return false;
+  scrollSummary(editor, marking);
+  return true;
+}
