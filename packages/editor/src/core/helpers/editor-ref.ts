@@ -20,7 +20,7 @@ import type { EditorRefApi, IEditorProps, TEditorCommands } from "@/types";
 // local imports
 import { getParagraphCount } from "./common";
 import { insertContentAtSavedSelection } from "./insert-content-at-cursor-position";
-import { scrollSummary, scrollToNodeViaDOMCoordinates } from "./scroll-to-node";
+import { scrollSummary, scrollToHeadingBySlug, scrollToNodeViaDOMCoordinates } from "./scroll-to-node";
 
 type TArgs = Pick<IEditorProps, "getEditorMetaData"> & {
   editor: Editor | null;
@@ -125,6 +125,10 @@ export const getEditorRefHelpers = (args: TArgs): EditorRefApi => {
       if (!editor) return;
       scrollSummary(editor, marking);
     },
+    scrollToHeadingBySlug: (slug) => {
+      if (!editor || !slug) return false;
+      return scrollToHeadingBySlug(editor, slug);
+    },
     setEditorValue: (content, emitUpdate = false) => {
       editor
         ?.chain()
@@ -140,7 +144,7 @@ export const getEditorRefHelpers = (args: TArgs): EditorRefApi => {
       const { itemKey } = props;
       const editorItems = getEditorMenuItems(editor);
 
-      const getEditorMenuItem = (itemKey: TEditorCommands) => editorItems.find((item) => item.key === itemKey);
+      const getEditorMenuItem = (commandKey: TEditorCommands) => editorItems.find((item) => item.key === commandKey);
 
       const item = getEditorMenuItem(itemKey);
       if (item) {
@@ -149,7 +153,7 @@ export const getEditorRefHelpers = (args: TArgs): EditorRefApi => {
         console.warn(`No command found for item: ${itemKey}`);
       }
     },
-    focus: (args) => editor?.commands.focus(args),
+    focus: (position) => editor?.commands.focus(position),
     getCoordsFromPos: (pos) => editor?.view.coordsAtPos(pos ?? editor.state.selection.from),
     getCurrentCursorPosition: () => editor?.state.selection.from,
     getAttributesWithExtendedMark: (mark, attribute) => {
@@ -195,7 +199,7 @@ export const getEditorRefHelpers = (args: TArgs): EditorRefApi => {
       const { itemKey } = props;
       const editorItems = getEditorMenuItems(editor);
 
-      const getEditorMenuItem = (itemKey: TEditorCommands) => editorItems.find((item) => item.key === itemKey);
+      const getEditorMenuItem = (commandKey: TEditorCommands) => editorItems.find((item) => item.key === commandKey);
       const item = getEditorMenuItem(itemKey);
       if (!item) return false;
 

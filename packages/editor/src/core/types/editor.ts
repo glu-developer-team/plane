@@ -138,6 +138,7 @@ export type CoreEditorRefApi = {
   onStateChange: (callback: () => void) => () => void;
   redo: () => void;
   scrollSummary: (marking: IMarking) => void;
+  scrollToHeadingBySlug: (slug: string) => boolean;
 
   scrollToNodeViaDOMCoordinates: ({ pos, behavior }: { pos?: number; behavior?: ScrollBehavior }) => void;
   setEditorValue: (content: string, emitUpdate?: boolean) => void;
