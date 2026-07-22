@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # See the LICENSE file for details.
 
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
 
@@ -14,7 +15,12 @@ from plane.app.serializers.backlog import (
 )
 from plane.app.views.base import BaseAPIView
 from plane.db.models import BacklogProjectSync, BacklogSyncJob, Project
-from plane.utils.backlog.sync import DEFAULT_SYNC_MODE, enqueue_backlog_pull, get_enabled_backlog_sync
+from plane.utils.backlog.sync import (
+    BACKLOG_SYNC_JOB_TIMEOUT,
+    DEFAULT_SYNC_MODE,
+    enqueue_backlog_pull,
+    get_enabled_backlog_sync,
+)
 
 
 class BacklogProjectSyncEndpoint(BaseAPIView):
@@ -137,6 +143,7 @@ class BacklogSyncStateEndpoint(BaseAPIView):
             BacklogSyncJob.objects.filter(
                 project_id=project_id,
                 status__in=[BacklogSyncJob.STATUS_PENDING, BacklogSyncJob.STATUS_RUNNING],
+                updated_at__gte=timezone.now() - BACKLOG_SYNC_JOB_TIMEOUT,
                 deleted_at__isnull=True,
             )
             .order_by("-created_at")

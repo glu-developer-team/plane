@@ -5,8 +5,7 @@
 from __future__ import annotations
 
 import html as html_module
-import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from django.utils import timezone
@@ -80,6 +79,8 @@ SYNC_MODE_BACKLOG_TO_PLANE = "backlog_to_plane"
 SYNC_MODE_BIDIRECTIONAL = "bidirectional"
 SYNC_MODE_CHOICES = (SYNC_MODE_BACKLOG_TO_PLANE, SYNC_MODE_BIDIRECTIONAL)
 DEFAULT_SYNC_MODE = SYNC_MODE_BIDIRECTIONAL
+BACKLOG_SYNC_JOB_TIMEOUT = timedelta(minutes=30)
+BACKLOG_SYNC_JOB_TIMEOUT_ERROR = "Backlog sync job timed out before completion"
 
 
 def get_sync_mode(sync: BacklogProjectSync) -> str:
@@ -154,6 +155,27 @@ def _pull_window_key(scope: str, project_id: str, issue_id: str | None) -> str:
     return f"backlog_pull:window:project:{project_id}"
 
 
+def expire_stale_backlog_sync_jobs(project_id, *, scope: str | None = None, issue_id=None) -> int:
+    """Fail orphaned jobs so they cannot block future pull requests indefinitely."""
+    now = timezone.now()
+    stale_jobs = BacklogSyncJob.objects.filter(
+        project_id=project_id,
+        status__in=[BacklogSyncJob.STATUS_PENDING, BacklogSyncJob.STATUS_RUNNING],
+        updated_at__lt=now - BACKLOG_SYNC_JOB_TIMEOUT,
+        deleted_at__isnull=True,
+    )
+    if scope:
+        stale_jobs = stale_jobs.filter(scope=scope)
+    if issue_id:
+        stale_jobs = stale_jobs.filter(issue_id=issue_id)
+
+    return stale_jobs.update(
+        status=BacklogSyncJob.STATUS_FAILED,
+        error=BACKLOG_SYNC_JOB_TIMEOUT_ERROR,
+        updated_at=now,
+    )
+
+
 def enqueue_backlog_pull(project_id, scope: str, issue_id=None) -> tuple[BacklogSyncJob | None, bool]:
     sync = get_enabled_backlog_sync(project_id)
     if not sync:
@@ -166,6 +188,8 @@ def enqueue_backlog_pull(project_id, scope: str, issue_id=None) -> tuple[Backlog
         issue = Issue.objects.filter(id=issue_id, project_id=project_id).first()
         if not issue:
             return None, False
+
+    expire_stale_backlog_sync_jobs(project_id, scope=scope, issue_id=issue_id)
 
     active_qs = BacklogSyncJob.objects.filter(
         project_id=project_id,
@@ -637,7 +661,9 @@ def sync_backlog_changelog_to_activities(
         }
 
         if field == "status" and new_value:
-            new_state = State.objects.filter(project_id=sync.project_id, name=new_value, deleted_at__isnull=True).first()
+            new_state = State.objects.filter(
+                project_id=sync.project_id, name=new_value, deleted_at__isnull=True
+            ).first()
             old_state = (
                 State.objects.filter(project_id=sync.project_id, name=old_value, deleted_at__isnull=True).first()
                 if old_value
@@ -718,7 +744,6 @@ def upsert_plane_issue_from_backlog(
     if issue_sync:
         issue = issue_sync.issue
         skip_content = should_skip_pull_overwrite(issue, issue_sync, updated)
-        old_state_id = issue.state_id
         update_fields: list[str] = []
 
         if not skip_content:

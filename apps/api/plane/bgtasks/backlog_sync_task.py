@@ -21,7 +21,6 @@ from plane.utils.backlog.sync import (
     is_backlog_push_enabled,
     parse_backlog_datetime,
     plane_issue_to_backlog_payload,
-    set_skip_push,
     sync_backlog_comments,
     translate_text,
     upsert_plane_issue_from_backlog,
@@ -29,20 +28,56 @@ from plane.utils.backlog.sync import (
 from plane.utils.exception_logger import log_exception
 
 
-def _mark_job_running(job_id: str) -> BacklogSyncJob:
-    job = BacklogSyncJob.objects.get(id=job_id)
-    job.status = BacklogSyncJob.STATUS_RUNNING
-    job.save(update_fields=["status", "updated_at"])
-    return job
+def _mark_job_running(job_id: str) -> BacklogSyncJob | None:
+    claimed = BacklogSyncJob.objects.filter(
+        id=job_id,
+        status=BacklogSyncJob.STATUS_PENDING,
+    ).update(
+        status=BacklogSyncJob.STATUS_RUNNING,
+        updated_at=timezone.now(),
+    )
+    if not claimed:
+        return None
+    return BacklogSyncJob.objects.get(id=job_id)
+
+
+def _touch_job(job_id: str) -> None:
+    BacklogSyncJob.objects.filter(
+        id=job_id,
+        status=BacklogSyncJob.STATUS_RUNNING,
+    ).update(updated_at=timezone.now())
+
+
+def _project_pull_updated_since(project_id: str) -> str | None:
+    last_completed_at = (
+        BacklogSyncJob.objects.filter(
+            project_id=project_id,
+            scope=BacklogSyncJob.SCOPE_PROJECT,
+            status=BacklogSyncJob.STATUS_COMPLETED,
+            deleted_at__isnull=True,
+        )
+        .order_by("-updated_at")
+        .values_list("updated_at", flat=True)
+        .first()
+    )
+    return last_completed_at.strftime("%Y-%m-%d") if last_completed_at else None
 
 
 def _mark_job_completed(job: BacklogSyncJob, stats: dict) -> None:
-    sync = get_enabled_backlog_sync(job.project_id)
     now = timezone.now()
-    job.status = BacklogSyncJob.STATUS_COMPLETED
-    job.stats = stats
-    job.error = ""
-    job.save(update_fields=["status", "stats", "error", "updated_at"])
+    completed = BacklogSyncJob.objects.filter(
+        id=job.id,
+        status=BacklogSyncJob.STATUS_RUNNING,
+    ).update(
+        status=BacklogSyncJob.STATUS_COMPLETED,
+        stats=stats,
+        error="",
+        updated_at=now,
+    )
+    if not completed:
+        return
+
+    sync = get_enabled_backlog_sync(job.project_id)
     if sync:
         sync.last_pulled_at = now
         sync.last_sync_completed_at = now
@@ -50,9 +85,13 @@ def _mark_job_completed(job: BacklogSyncJob, stats: dict) -> None:
 
 
 def _mark_job_failed(job_id: str, error: str) -> None:
-    BacklogSyncJob.objects.filter(id=job_id).update(
+    BacklogSyncJob.objects.filter(
+        id=job_id,
+        status__in=[BacklogSyncJob.STATUS_PENDING, BacklogSyncJob.STATUS_RUNNING],
+    ).update(
         status=BacklogSyncJob.STATUS_FAILED,
         error=error[:4000],
+        updated_at=timezone.now(),
     )
 
 
@@ -174,6 +213,8 @@ def backlog_pull_project_task(project_id: str, job_id: str) -> None:
     job = None
     try:
         job = _mark_job_running(job_id)
+        if not job:
+            return
         sync = get_enabled_backlog_sync(project_id)
         if not sync:
             _mark_job_failed(job_id, "Backlog sync not configured")
@@ -186,9 +227,7 @@ def backlog_pull_project_task(project_id: str, job_id: str) -> None:
             sync.save(update_fields=["backlog_project_id", "updated_at"])
 
         ensure_status_map(sync, client)
-        updated_since = None
-        if sync.last_pulled_at:
-            updated_since = sync.last_pulled_at.strftime("%Y-%m-%d")
+        updated_since = _project_pull_updated_since(project_id)
 
         stats = {"created": 0, "updated": 0, "comments_created": 0, "activities_created": 0, "updated_issue_ids": []}
         offset = 0
@@ -206,6 +245,7 @@ def backlog_pull_project_task(project_id: str, job_id: str) -> None:
                 issue_sync = BacklogIssueSync.objects.filter(issue_id=issue.id).first()
                 if issue_sync:
                     sync_backlog_comments(sync, client, issue_sync, stats)
+                _touch_job(job_id)
             if len(issues) < 100:
                 break
             offset += 100
@@ -222,6 +262,8 @@ def backlog_pull_issue_task(project_id: str, issue_id: str, job_id: str) -> None
     job = None
     try:
         job = _mark_job_running(job_id)
+        if not job:
+            return
         sync = get_enabled_backlog_sync(project_id)
         if not sync:
             _mark_job_failed(job_id, "Backlog sync not configured")
