@@ -82,7 +82,7 @@ export const SubIssuesListItemProperties = observer(function SubIssuesListItemPr
   const minDate = getDate(issue.start_date);
 
   return (
-    <div className="relative flex items-center gap-2">
+    <div className="relative flex items-center gap-2" onFocus={handleEventPropagation} onClick={handleEventPropagation}>
       <WithDisplayPropertiesHOC displayProperties={displayProperties} displayPropertyKey="state">
         <div className="h-5 flex-shrink-0">
           <StateDropdown
