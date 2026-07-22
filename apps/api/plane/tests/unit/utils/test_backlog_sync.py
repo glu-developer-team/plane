@@ -7,19 +7,122 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from plane.db.models import BacklogActivitySync, BacklogIssueSync, BacklogProjectSync, Issue, IssueActivity, State
+from plane.bgtasks.backlog_sync_task import _mark_job_running, _project_pull_updated_since
+from plane.db.models import (
+    BacklogActivitySync,
+    BacklogIssueSync,
+    BacklogProjectSync,
+    BacklogSyncJob,
+    Issue,
+    IssueActivity,
+    State,
+)
 from plane.utils.backlog.sync import (
+    BACKLOG_SYNC_JOB_TIMEOUT,
+    BACKLOG_SYNC_JOB_TIMEOUT_ERROR,
+    DEFAULT_SYNC_MODE,
+    SYNC_MODE_BACKLOG_TO_PLANE,
+    SYNC_MODE_BIDIRECTIONAL,
     _changelog_activity_comment,
     _format_changelog_value,
     backlog_comment_to_html,
     backlog_text_to_html,
+    enqueue_backlog_pull,
+    expire_stale_backlog_sync_jobs,
+    get_sync_mode,
     html_to_markdown,
     html_to_plain,
+    is_backlog_push_enabled,
     plane_issue_to_backlog_payload,
     should_skip_pull_overwrite,
     sync_backlog_changelog_to_activities,
     upsert_plane_issue_from_backlog,
 )
+
+
+@pytest.mark.unit
+class TestBacklogPullJobRecovery:
+    def test_stale_jobs_are_failed_after_timeout(self):
+        now = datetime(2026, 7, 22, 2, 30, tzinfo=dt_timezone.utc)
+        stale_jobs = MagicMock()
+        scoped_jobs = stale_jobs.filter.return_value
+        scoped_jobs.update.return_value = 2
+
+        with (
+            patch("plane.utils.backlog.sync.timezone.now", return_value=now),
+            patch("plane.utils.backlog.sync.BacklogSyncJob.objects.filter", return_value=stale_jobs) as mock_filter,
+        ):
+            expired = expire_stale_backlog_sync_jobs("project-1", scope=BacklogSyncJob.SCOPE_PROJECT)
+
+        assert expired == 2
+        mock_filter.assert_called_once_with(
+            project_id="project-1",
+            status__in=[BacklogSyncJob.STATUS_PENDING, BacklogSyncJob.STATUS_RUNNING],
+            updated_at__lt=now - BACKLOG_SYNC_JOB_TIMEOUT,
+            deleted_at__isnull=True,
+        )
+        stale_jobs.filter.assert_called_once_with(scope=BacklogSyncJob.SCOPE_PROJECT)
+        scoped_jobs.update.assert_called_once_with(
+            status=BacklogSyncJob.STATUS_FAILED,
+            error=BACKLOG_SYNC_JOB_TIMEOUT_ERROR,
+            updated_at=now,
+        )
+
+    def test_enqueue_expires_stale_jobs_before_creating_project_pull(self):
+        sync = MagicMock(workspace_id="workspace-1")
+        active_jobs = MagicMock()
+        active_jobs.filter.return_value.order_by.return_value.first.return_value = None
+        new_job = MagicMock(id="job-2", celery_task_id="")
+
+        with (
+            patch("plane.utils.backlog.sync.get_enabled_backlog_sync", return_value=sync),
+            patch("plane.utils.backlog.sync.expire_stale_backlog_sync_jobs") as mock_expire,
+            patch("plane.utils.backlog.sync.BacklogSyncJob.objects.filter", return_value=active_jobs),
+            patch("plane.utils.backlog.sync.BacklogSyncJob.objects.create", return_value=new_job),
+            patch("plane.utils.backlog.sync.redis_instance") as mock_redis,
+            patch("plane.bgtasks.backlog_sync_task.backlog_pull_project_task.delay") as mock_delay,
+        ):
+            mock_redis.return_value.get.return_value = None
+            mock_delay.return_value.id = "new-celery-task"
+            job, deduplicated = enqueue_backlog_pull("project-1", BacklogSyncJob.SCOPE_PROJECT)
+
+        mock_expire.assert_called_once_with(
+            "project-1",
+            scope=BacklogSyncJob.SCOPE_PROJECT,
+            issue_id=None,
+        )
+        assert deduplicated is False
+        assert job == new_job
+        assert new_job.celery_task_id == "new-celery-task"
+        new_job.save.assert_called_once_with(update_fields=["celery_task_id", "updated_at"])
+
+    def test_project_cursor_uses_completed_project_jobs_only(self):
+        project_completed_at = datetime(2026, 6, 19, 7, 57, tzinfo=dt_timezone.utc)
+        jobs = MagicMock()
+        jobs.order_by.return_value.values_list.return_value.first.return_value = project_completed_at
+
+        with patch("plane.bgtasks.backlog_sync_task.BacklogSyncJob.objects.filter", return_value=jobs) as mock_filter:
+            updated_since = _project_pull_updated_since("project-1")
+
+        assert updated_since == "2026-06-19"
+        mock_filter.assert_called_once_with(
+            project_id="project-1",
+            scope=BacklogSyncJob.SCOPE_PROJECT,
+            status=BacklogSyncJob.STATUS_COMPLETED,
+            deleted_at__isnull=True,
+        )
+
+    def test_failed_job_cannot_be_revived_by_delayed_task(self):
+        jobs = MagicMock()
+        jobs.update.return_value = 0
+
+        with (
+            patch("plane.bgtasks.backlog_sync_task.BacklogSyncJob.objects.filter", return_value=jobs),
+            patch("plane.bgtasks.backlog_sync_task.BacklogSyncJob.objects.get") as mock_get,
+        ):
+            assert _mark_job_running("failed-job") is None
+
+        mock_get.assert_not_called()
 
 
 @pytest.mark.unit
@@ -82,15 +185,6 @@ class TestPlaneIssueToBacklogPayload:
         assert "item" in payload["description"]
 
 
-from plane.utils.backlog.sync import (
-    DEFAULT_SYNC_MODE,
-    SYNC_MODE_BACKLOG_TO_PLANE,
-    SYNC_MODE_BIDIRECTIONAL,
-    get_sync_mode,
-    is_backlog_push_enabled,
-)
-
-
 @pytest.mark.unit
 class TestBacklogSyncMode:
     def test_default_sync_mode(self):
@@ -128,7 +222,9 @@ class TestBacklogCommentHelpers:
     def test_backlog_comment_to_html_translates_content(self):
         sync = MagicMock()
         sync.config = {"locale_map": {"ja_to_en": {"要望": "Request"}}}
-        with patch("plane.utils.backlog.sync.translate_text", side_effect=lambda _s, text, **_: text.replace("要望", "Request")):
+        with patch(
+            "plane.utils.backlog.sync.translate_text", side_effect=lambda _s, text, **_: text.replace("要望", "Request")
+        ):
             html = backlog_comment_to_html(sync, {"content": "要望です"})
         assert html is not None
         assert "Request" in html
@@ -170,7 +266,9 @@ class TestFieldLevelMerge:
 
         workspace = Workspace.objects.create(name="WS", slug="ws", owner=create_user)
         project = Project.objects.create(name="Proj", identifier="PRJ", workspace=workspace, created_by=create_user)
-        open_state = State.objects.create(name="Open", project=project, group="backlog", default=True, created_by=create_user)
+        open_state = State.objects.create(
+            name="Open", project=project, group="backlog", default=True, created_by=create_user
+        )
         closed_state = State.objects.create(
             name="Closed", project=project, group="completed", default=False, created_by=create_user
         )
@@ -235,8 +333,12 @@ class TestChangelogToActivity:
 
         workspace = Workspace.objects.create(name="WS2", slug="ws2", owner=create_user)
         project = Project.objects.create(name="Proj2", identifier="P2", workspace=workspace, created_by=create_user)
-        state = State.objects.create(name="Todo", project=project, group="backlog", default=True, created_by=create_user)
-        issue = Issue.objects.create(name="Issue", workspace=workspace, project=project, state=state, created_by=create_user)
+        state = State.objects.create(
+            name="Todo", project=project, group="backlog", default=True, created_by=create_user
+        )
+        issue = Issue.objects.create(
+            name="Issue", workspace=workspace, project=project, state=state, created_by=create_user
+        )
         sync = BacklogProjectSync.objects.create(
             workspace=workspace,
             project=project,
@@ -278,8 +380,12 @@ class TestChangelogToActivity:
 
         workspace = Workspace.objects.create(name="WS4", slug="ws4", owner=create_user)
         project = Project.objects.create(name="Proj4", identifier="P4", workspace=workspace, created_by=create_user)
-        state = State.objects.create(name="Todo", project=project, group="backlog", default=True, created_by=create_user)
-        issue = Issue.objects.create(name="Issue", workspace=workspace, project=project, state=state, created_by=create_user)
+        state = State.objects.create(
+            name="Todo", project=project, group="backlog", default=True, created_by=create_user
+        )
+        issue = Issue.objects.create(
+            name="Issue", workspace=workspace, project=project, state=state, created_by=create_user
+        )
         sync = BacklogProjectSync.objects.create(
             workspace=workspace,
             project=project,
@@ -303,7 +409,10 @@ class TestChangelogToActivity:
             "created": "2025-06-18T10:00:00Z",
         }
         stats: dict = {}
-        with patch("plane.utils.backlog.sync.resolve_status_english", side_effect=lambda _s, v, **_: {"未対応": "Open", "処理中": "In Progress"}.get(v, v)):
+        with patch(
+            "plane.utils.backlog.sync.resolve_status_english",
+            side_effect=lambda _s, v, **_: {"未対応": "Open", "処理中": "In Progress"}.get(v, v),
+        ):
             sync_backlog_changelog_to_activities(sync, issue_sync, entry, stats=stats)
 
         activity = IssueActivity.objects.get(issue=issue, field="state")
@@ -315,8 +424,12 @@ class TestChangelogToActivity:
 
         workspace = Workspace.objects.create(name="WS3", slug="ws3", owner=create_user)
         project = Project.objects.create(name="Proj3", identifier="P3", workspace=workspace, created_by=create_user)
-        state = State.objects.create(name="Todo", project=project, group="backlog", default=True, created_by=create_user)
-        issue = Issue.objects.create(name="Issue", workspace=workspace, project=project, state=state, created_by=create_user)
+        state = State.objects.create(
+            name="Todo", project=project, group="backlog", default=True, created_by=create_user
+        )
+        issue = Issue.objects.create(
+            name="Issue", workspace=workspace, project=project, state=state, created_by=create_user
+        )
         sync = BacklogProjectSync.objects.create(
             workspace=workspace,
             project=project,
