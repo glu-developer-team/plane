@@ -105,7 +105,29 @@ export type TDocumentInfo = {
   words: number;
 };
 
+export type TEditorCommentAnchorRect = {
+  bottom: number;
+  height: number;
+  left: number;
+  right: number;
+  top: number;
+  width: number;
+};
+
+export type TEditorCommentSelection = {
+  from: number;
+  to: number;
+  text: string;
+  rect: TEditorCommentAnchorRect;
+};
+
+export type TEditorCommentHandler = {
+  onCreateInlineComment?: (selection: TEditorCommentSelection) => void;
+  onOpenInlineComment?: (commentId: string, rect: TEditorCommentAnchorRect) => void;
+};
+
 export type CoreEditorRefApi = {
+  addPageCommentMark: (commentId: string, from: number, to: number) => boolean;
   blur: () => void;
   clearEditor: (emitUpdate?: boolean) => void;
   createSelectionAtCursorPosition: () => void;
@@ -172,6 +194,7 @@ export type IEditorProps = {
   id: string;
   initialValue: string;
   isTouchDevice?: boolean;
+  commentHandler?: TEditorCommentHandler;
   mentionHandler: TMentionHandler;
   onAssetChange?: (assets: TEditorAsset[]) => void;
   onEditorFocus?: () => void;

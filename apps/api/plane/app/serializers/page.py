@@ -156,6 +156,7 @@ class PageCommentSerializer(BaseSerializer):
             "selected_text",
             "selection_from",
             "selection_to",
+            "is_inline",
             "created_at",
             "updated_at",
             "created_by",
@@ -174,21 +175,32 @@ class PageCommentSerializer(BaseSerializer):
             "updated_by",
         ]
 
-    def validate_comment(self, value):
-        value = value.strip()
-        if not value:
-            raise serializers.ValidationError("Comment cannot be empty.")
-        if len(value) > 5000:
-            raise serializers.ValidationError("Comment cannot exceed 5000 characters.")
-        return value
+    def validate(self, data):
+        comment = data.get("comment", "").strip()
+        selected_text = data.get("selected_text", "").strip()
+        is_inline = data.get("is_inline", False)
 
-    def validate_selected_text(self, value):
-        value = value.strip()
-        if not value:
-            raise serializers.ValidationError("Select text on the page before commenting.")
-        if len(value) > 5000:
-            raise serializers.ValidationError("Selected text cannot exceed 5000 characters.")
-        return value
+        if not comment:
+            raise serializers.ValidationError({"comment": "Comment cannot be empty."})
+        if len(comment) > 5000:
+            raise serializers.ValidationError({"comment": "Comment cannot exceed 5000 characters."})
+        if len(selected_text) > 5000:
+            raise serializers.ValidationError({"selected_text": "Selected text cannot exceed 5000 characters."})
+        if is_inline and (
+            not selected_text or data.get("selection_from") is None or data.get("selection_to") is None
+        ):
+            raise serializers.ValidationError(
+                {"selected_text": "Inline comments require selected text and a valid selection."}
+            )
+        if is_inline and data["selection_from"] >= data["selection_to"]:
+            raise serializers.ValidationError({"selection_to": "Selection end must be after its start."})
+
+        data["comment"] = comment
+        data["selected_text"] = selected_text if is_inline else ""
+        if not is_inline:
+            data["selection_from"] = None
+            data["selection_to"] = None
+        return data
 
 
 class PageLiteSerializer(BaseSerializer):

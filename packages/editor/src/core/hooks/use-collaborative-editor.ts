@@ -6,12 +6,13 @@
 
 import type { HocuspocusProvider } from "@hocuspocus/provider";
 import type { Extensions } from "@tiptap/core";
-import Collaboration from "@tiptap/extension-collaboration";
+import CollaborationExtension from "@tiptap/extension-collaboration";
 // react
 import type React from "react";
 import { useEffect, useMemo } from "react";
 // extensions
 import { HeadingListExtension, SideMenuExtension } from "@/extensions";
+import { CollaborationCursorExtension } from "@/extensions/collaboration-cursor";
 // hooks
 import { useEditor } from "@/hooks/use-editor";
 // plane editor extensions
@@ -65,6 +66,7 @@ export const useCollaborativeEditor = (props: UseCollaborativeEditorArgs) => {
     titleRef,
     updatePageProperties,
     user,
+    commentHandler,
   } = props;
 
   const { mainNavigationExtension, titleNavigationExtension, setMainEditor, setTitleEditor } = useEditorNavigation();
@@ -77,10 +79,13 @@ export const useCollaborativeEditor = (props: UseCollaborativeEditorArgs) => {
         dragDropEnabled,
       }),
       HeadingListExtension,
-      Collaboration.configure({
+      CollaborationExtension.configure({
         document: provider.document,
         field: "default",
       }),
+      ...(!disabledExtensions.includes("collaboration-cursor")
+        ? [CollaborationCursorExtension({ provider, user })]
+        : []),
       ...extensions,
       ...DocumentEditorAdditionalExtensions({
         disabledExtensions,
@@ -133,6 +138,7 @@ export const useCollaborativeEditor = (props: UseCollaborativeEditorArgs) => {
       showPlaceholderOnEmpty,
       provider,
       tabIndex,
+      commentHandler,
     }),
     [
       provider,
@@ -157,6 +163,7 @@ export const useCollaborativeEditor = (props: UseCollaborativeEditorArgs) => {
       placeholder,
       showPlaceholderOnEmpty,
       tabIndex,
+      commentHandler,
     ]
   );
 
@@ -164,7 +171,7 @@ export const useCollaborativeEditor = (props: UseCollaborativeEditorArgs) => {
 
   const titleExtensions = useMemo(
     () => [
-      Collaboration.configure({
+      CollaborationExtension.configure({
         document: provider.document,
         field: "title",
       }),

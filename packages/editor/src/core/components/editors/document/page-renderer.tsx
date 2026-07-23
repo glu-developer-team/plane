@@ -39,6 +39,7 @@ type Props = {
   tabIndex?: number;
   provider?: HocuspocusProvider;
   state?: TCollabValue["state"];
+  commentHandler?: IEditorProps["commentHandler"];
 };
 
 export function PageRenderer(props: Props) {
@@ -58,6 +59,7 @@ export function PageRenderer(props: Props) {
     titleEditor,
     provider,
     state,
+    commentHandler,
   } = props;
   return (
     <div
@@ -105,6 +107,7 @@ export function PageRenderer(props: Props) {
                     disabledExtensions={disabledExtensions}
                     extendedEditorProps={extendedEditorProps}
                     flaggedExtensions={flaggedExtensions}
+                    commentHandler={commentHandler}
                   />
                 )}
                 <BlockMenu

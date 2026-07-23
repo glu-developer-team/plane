@@ -8,6 +8,7 @@ import { isNodeSelection } from "@tiptap/core";
 import type { Editor } from "@tiptap/core";
 import { BubbleMenu, useEditorState } from "@tiptap/react";
 import type { BubbleMenuProps } from "@tiptap/react";
+import { MessageSquarePlus } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 // plane utils
 import { cn } from "@plane/utils";
@@ -31,7 +32,7 @@ import { CORE_EXTENSIONS } from "@/constants/extension";
 // extensions
 import { isCellSelection } from "@/extensions/table/table/utilities/helpers";
 // types
-import type { IEditorPropsExtended, TEditorCommands, TExtensions } from "@/types";
+import type { IEditorPropsExtended, TEditorCommentHandler, TEditorCommands, TExtensions } from "@/types";
 // local imports
 import { TextAlignmentSelector } from "./alignment-selector";
 import { BubbleMenuLinkSelector } from "./link-selector";
@@ -70,10 +71,11 @@ type Props = {
   editor: Editor;
   extendedEditorProps: IEditorPropsExtended;
   flaggedExtensions: TExtensions[];
+  commentHandler?: TEditorCommentHandler;
 };
 
 export function EditorBubbleMenu(props: Props) {
-  const { editor } = props;
+  const { commentHandler, editor } = props;
   // states
   const [isSelecting, setIsSelecting] = useState(false);
   // refs
@@ -92,7 +94,7 @@ export function EditorBubbleMenu(props: Props) {
 
   const editorState: EditorStateType = useEditorState({
     editor,
-    selector: ({ editor }) => ({
+    selector: ({ editor: currentEditor }) => ({
       code: formattingItems.code.isActive(),
       bold: formattingItems.bold.isActive(),
       italic: formattingItems.italic.isActive(),
@@ -101,8 +103,8 @@ export function EditorBubbleMenu(props: Props) {
       left: formattingItems["text-align"].isActive({ alignment: "left" }),
       right: formattingItems["text-align"].isActive({ alignment: "right" }),
       center: formattingItems["text-align"].isActive({ alignment: "center" }),
-      color: COLORS_LIST.find((c) => TextColorItem(editor).isActive({ color: c.key })),
-      backgroundColor: COLORS_LIST.find((c) => BackgroundColorItem(editor).isActive({ color: c.key })),
+      color: COLORS_LIST.find((c) => TextColorItem(currentEditor).isActive({ color: c.key })),
+      backgroundColor: COLORS_LIST.find((c) => BackgroundColorItem(currentEditor).isActive({ color: c.key })),
     }),
   });
 
@@ -112,15 +114,15 @@ export function EditorBubbleMenu(props: Props) {
 
   const bubbleMenuProps: EditorBubbleMenuProps = {
     editor,
-    shouldShow: ({ state, editor }) => {
+    shouldShow: ({ state, editor: currentEditor }) => {
       const { selection } = state;
       const { empty } = selection;
 
       if (
         empty ||
-        !editor.isEditable ||
-        editor.isActive(CORE_EXTENSIONS.IMAGE) ||
-        editor.isActive(CORE_EXTENSIONS.CUSTOM_IMAGE) ||
+        !currentEditor.isEditable ||
+        currentEditor.isActive(CORE_EXTENSIONS.IMAGE) ||
+        currentEditor.isActive(CORE_EXTENSIONS.CUSTOM_IMAGE) ||
         isNodeSelection(selection) ||
         isCellSelection(selection) ||
         isSelecting
@@ -227,6 +229,40 @@ export function EditorBubbleMenu(props: Props) {
             ))}
           </div>
           <TextAlignmentSelector editor={editor} editorState={editorState} />
+          {commentHandler?.onCreateInlineComment && (
+            <div className="px-2">
+              <button
+                type="button"
+                aria-label="Comment on selected text"
+                title="Comment"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const { from, to } = editor.state.selection;
+                  const text = editor.state.doc.textBetween(from, to, "\n").trim();
+                  if (!text) return;
+                  const rect = editor.view.coordsAtPos(to);
+                  commentHandler.onCreateInlineComment?.({
+                    from,
+                    to,
+                    text,
+                    rect: {
+                      bottom: rect.bottom,
+                      height: rect.bottom - rect.top,
+                      left: rect.left,
+                      right: rect.right,
+                      top: rect.top,
+                      width: rect.right - rect.left,
+                    },
+                  });
+                }}
+                className="grid size-7 place-items-center rounded-sm text-tertiary transition-colors hover:bg-layer-1 hover:text-primary active:bg-layer-1"
+              >
+                <MessageSquarePlus className="size-4" />
+              </button>
+            </div>
+          )}
         </div>
       )}
     </BubbleMenu>

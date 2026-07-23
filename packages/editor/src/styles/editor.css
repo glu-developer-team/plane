@@ -536,3 +536,80 @@ span[data-name][data-type="emoji"] img {
   max-height: 75vh !important;
   margin: 0 auto;
 }
+
+/* Page comment annotations */
+.page-comment-highlight {
+  border-radius: 0.2rem;
+  background: color-mix(in srgb, #facc15 32%, transparent);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  box-shadow: 0 0 0 1px color-mix(in srgb, #ca8a04 10%, transparent);
+}
+
+.page-comment-anchor {
+  display: inline-grid;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-left: 0.25rem;
+  place-items: center;
+  vertical-align: text-bottom;
+  cursor: pointer;
+  border: 1px solid color-mix(in srgb, #ca8a04 28%, transparent);
+  border-radius: 9999px;
+  color: #a16207;
+  background: color-mix(in srgb, #fef3c7 88%, var(--background-color-primary));
+  transition:
+    transform 120ms ease,
+    background-color 120ms ease;
+}
+
+.page-comment-anchor:hover {
+  transform: translateY(-1px);
+  background: #fde68a;
+}
+
+.page-comment-anchor svg {
+  width: 0.78rem;
+  height: 0.78rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+/* Live collaborator cursors */
+.collaboration-cursor__selection {
+  background: color-mix(in srgb, var(--collaboration-user-color) 24%, transparent);
+  border-radius: 0.15rem;
+}
+
+.collaboration-cursor__caret {
+  position: relative;
+  display: inline;
+  pointer-events: none;
+  border-left: 2px solid var(--collaboration-user-color);
+  margin-left: -1px;
+  margin-right: -1px;
+  word-break: normal;
+}
+
+.collaboration-cursor__label {
+  position: absolute;
+  bottom: 100%;
+  left: -2px;
+  z-index: 20;
+  max-width: 12rem;
+  padding: 0.16rem 0.42rem;
+  overflow: hidden;
+  border-radius: 0.3rem 0.3rem 0.3rem 0;
+  color: white;
+  background: var(--collaboration-user-color);
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 18%);
+  user-select: none;
+}

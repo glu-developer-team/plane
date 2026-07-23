@@ -12,6 +12,7 @@ import { CollaborativeDocumentEditorWithRef } from "@plane/editor";
 import type {
   CollaborationState,
   EditorRefApi,
+  TEditorCommentHandler,
   EditorTitleRefApi,
   TAIMenuProps,
   TDisplayConfig,
@@ -46,6 +47,7 @@ import { PageContentLoader } from "../loaders/page-content-loader";
 import { PageEditorHeaderRoot } from "./header";
 import { PageContentBrowser } from "./summary";
 import { PageComments } from "./page-comments";
+import type { TPageCommentsRef } from "./page-comments";
 
 export type TEditorBodyConfig = {
   fileHandler: TFileHandler;
@@ -94,6 +96,7 @@ export const PageEditorBody = observer(function PageEditorBody(props: Props) {
   } = props;
   // refs
   const titleEditorRef = useRef<EditorTitleRefApi>(null);
+  const pageCommentsRef = useRef<TPageCommentsRef>(null);
   // store hooks
   const { data: currentUser } = useUser();
   const { getWorkspaceBySlug } = useWorkspace();
@@ -134,6 +137,16 @@ export const PageEditorBody = observer(function PageEditorBody(props: Props) {
       wideLayout: isFullWidth,
     }),
     [fontSize, fontStyle, isFullWidth]
+  );
+  const commentHandler = useMemo<TEditorCommentHandler | undefined>(
+    () =>
+      projectId
+        ? {
+            onCreateInlineComment: (selection) => pageCommentsRef.current?.startInlineComment(selection),
+            onOpenInlineComment: (commentId, rect) => pageCommentsRef.current?.openInlineComment(commentId, rect),
+          }
+        : undefined,
+    [projectId]
   );
 
   // Use the new hook to handle page events
@@ -245,14 +258,14 @@ export const PageEditorBody = observer(function PageEditorBody(props: Props) {
           <div className="page-summary-container absolute top-[64px] right-0 z-[5] h-full">
             <div className="sticky top-[72px]">
               <div className="group/page-toc relative px-page-x">
-                <div
-                  className="max-h-[50vh] !cursor-pointer overflow-hidden"
-                  role="button"
+                <button
+                  type="button"
+                  className="block max-h-[50vh] w-full !cursor-pointer overflow-hidden text-left"
                   aria-label={t("page_navigation_pane.outline_floating_button")}
                   onClick={handleOpenNavigationPane}
                 >
                   <PageContentBrowser className="overflow-y-auto" editorRef={editorRef} showOutline />
-                </div>
+                </button>
                 <div className="vertical-scrollbar pointer-events-none absolute top-0 right-0 scrollbar-sm max-h-[70vh] w-52 translate-x-1/2 overflow-y-scroll rounded-sm bg-surface-2 p-4 whitespace-nowrap opacity-0 transition-all duration-300 group-hover/page-toc:pointer-events-auto group-hover/page-toc:-translate-x-1/4 group-hover/page-toc:opacity-100">
                   <PageContentBrowser className="overflow-y-auto" editorRef={editorRef} />
                 </div>
@@ -282,7 +295,7 @@ export const PageEditorBody = observer(function PageEditorBody(props: Props) {
                 if (!res) throw new Error("Failed in fetching mentions");
                 return res;
               },
-              renderComponent: (props) => <EditorMentionsRoot {...props} />,
+              renderComponent: (mentionProps) => <EditorMentionsRoot {...mentionProps} />,
               getMentionedEntityDetails: (id: string) => ({ display_name: getUserDetails(id)?.display_name ?? "" }),
             }}
             updatePageProperties={updatePageProperties}
@@ -297,10 +310,12 @@ export const PageEditorBody = observer(function PageEditorBody(props: Props) {
             onAssetChange={updateAssetsList}
             extendedEditorProps={extendedEditorProps}
             isFetchingFallbackBinary={isFetchingFallbackBinary}
+            commentHandler={commentHandler}
           />
           {projectId && (
             <div className={blockWidthClassName}>
               <PageComments
+                ref={pageCommentsRef}
                 editorRef={editorForwardRef}
                 pageId={pageId}
                 projectId={projectId}

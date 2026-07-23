@@ -217,7 +217,7 @@ export class ProjectPageService extends APIService {
     workspaceSlug: string,
     projectId: string,
     pageId: string,
-    data: Pick<TPageComment, "comment" | "selected_text" | "selection_from" | "selection_to">
+    data: Pick<TPageComment, "comment" | "selected_text" | "selection_from" | "selection_to" | "is_inline">
   ): Promise<TPageComment> {
     return this.post(`/api/workspaces/${workspaceSlug}/projects/${projectId}/pages/${pageId}/comments/`, data)
       .then((response) => response?.data)

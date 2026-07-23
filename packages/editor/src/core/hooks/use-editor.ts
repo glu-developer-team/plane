@@ -49,6 +49,7 @@ export const useEditor = (props: TEditorHookProps) => {
     showPlaceholderOnEmpty,
     tabIndex,
     provider,
+    commentHandler,
     value,
   } = props;
 
@@ -80,6 +81,7 @@ export const useEditor = (props: TEditorHookProps) => {
           showPlaceholderOnEmpty,
           tabIndex,
           provider,
+          commentHandler,
         }),
         ...extensions,
       ],
@@ -88,10 +90,10 @@ export const useEditor = (props: TEditorHookProps) => {
       onTransaction: () => {
         onTransaction?.();
       },
-      onUpdate: ({ editor, transaction }) => {
+      onUpdate: ({ editor: currentEditor, transaction }) => {
         // Check if this update is only due to migration update
         const isMigrationUpdate = transaction?.getMeta("uniqueIdOnlyChange") === true;
-        onChange?.(editor.getJSON(), editor.getHTML(), { isMigrationUpdate });
+        onChange?.(currentEditor.getJSON(), currentEditor.getHTML(), { isMigrationUpdate });
       },
       onDestroy: () => handleEditorReady?.(false),
       onFocus: onEditorFocus,
@@ -133,8 +135,8 @@ export const useEditor = (props: TEditorHookProps) => {
   // subscribe to assets list changes
   const assetsList = useEditorState({
     editor,
-    selector: ({ editor }) => ({
-      assets: editor?.storage.utility?.assetsList ?? [],
+    selector: ({ editor: currentEditor }) => ({
+      assets: currentEditor?.storage.utility?.assetsList ?? [],
     }),
   });
   // trigger callback when assets list changes

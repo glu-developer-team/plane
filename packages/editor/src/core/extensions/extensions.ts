@@ -7,8 +7,8 @@
 import type { HocuspocusProvider } from "@hocuspocus/provider";
 import type { Extensions } from "@tiptap/core";
 import { CharacterCount } from "@tiptap/extension-character-count";
-import TaskItem from "@tiptap/extension-task-item";
-import TaskList from "@tiptap/extension-task-list";
+import TaskItemExtension from "@tiptap/extension-task-item";
+import TaskListExtension from "@tiptap/extension-task-list";
 import { TextStyle } from "@tiptap/extension-text-style";
 import { Underline } from "@tiptap/extension-underline";
 import { Markdown } from "tiptap-markdown";
@@ -41,6 +41,7 @@ import type { IEditorProps } from "@/types";
 import { CustomImageExtension } from "./custom-image/extension";
 import { EmojiExtension } from "./emoji/extension";
 import { CustomPlaceholderExtension } from "./placeholder";
+import { PageCommentExtension } from "./page-comment";
 import { CustomStarterKitExtension } from "./starter-kit";
 import { UniqueID } from "./unique-id/extension";
 
@@ -51,6 +52,7 @@ type TArguments = Pick<
   | "fileHandler"
   | "getEditorMetaData"
   | "isTouchDevice"
+  | "commentHandler"
   | "mentionHandler"
   | "placeholder"
   | "showPlaceholderOnEmpty"
@@ -77,6 +79,7 @@ export const CoreEditorExtensions = (args: TArguments): Extensions => {
     editable,
     extendedEditorProps,
     provider,
+    commentHandler,
   } = args;
 
   const extensions = [
@@ -92,12 +95,12 @@ export const CoreEditorExtensions = (args: TArguments): Extensions => {
     CustomTypographyExtension,
     Underline,
     TextStyle,
-    TaskList.configure({
+    TaskListExtension.configure({
       HTMLAttributes: {
         class: "not-prose pl-2 space-y-2",
       },
     }),
-    TaskItem.configure({
+    TaskItemExtension.configure({
       HTMLAttributes: {
         class: "relative",
       },
@@ -121,6 +124,7 @@ export const CoreEditorExtensions = (args: TArguments): Extensions => {
     CustomColorExtension,
     CustomTextAlignExtension,
     CustomCalloutExtension,
+    PageCommentExtension(commentHandler),
     UtilityExtension({
       disabledExtensions,
       flaggedExtensions,

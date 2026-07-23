@@ -31,6 +31,10 @@ export const getEditorRefHelpers = (args: TArgs): EditorRefApi => {
   const { editor, getEditorMetaData, provider } = args;
 
   return {
+    addPageCommentMark: (commentId, from, to) => {
+      if (!editor || from >= to || from < 0 || to > editor.state.doc.content.size) return false;
+      return editor.chain().focus().setTextSelection({ from, to }).setMark("pageComment", { commentId }).run();
+    },
     blur: () => editor?.commands.blur(),
     clearEditor: (emitUpdate = false) => {
       editor?.chain().setMeta(CORE_EDITOR_META.SKIP_FILE_DELETION, true).clearContent(emitUpdate).run();

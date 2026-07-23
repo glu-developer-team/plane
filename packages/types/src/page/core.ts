@@ -83,6 +83,7 @@ export type TPageComment = {
   selected_text: string;
   selection_from: number | null;
   selection_to: number | null;
+  is_inline: boolean;
   created_at: string;
   updated_at: string;
   created_by: string | null;

@@ -164,9 +164,10 @@ class PageComment(ProjectBaseModel):
         related_name="page_comments",
     )
     comment = models.TextField()
-    selected_text = models.TextField()
+    selected_text = models.TextField(blank=True, default="")
     selection_from = models.PositiveIntegerField(null=True, blank=True)
     selection_to = models.PositiveIntegerField(null=True, blank=True)
+    is_inline = models.BooleanField(default=False)
 
     class Meta:
         verbose_name = "Page Comment"

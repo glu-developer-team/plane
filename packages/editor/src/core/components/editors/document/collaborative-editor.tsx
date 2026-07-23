@@ -54,6 +54,7 @@ function CollaborativeDocumentEditorInner(props: ICollaborativeDocumentEditorPro
     titleRef,
     updatePageProperties,
     isFetchingFallbackBinary,
+    commentHandler,
   } = props;
 
   // Get non-null provider from context
@@ -87,6 +88,7 @@ function CollaborativeDocumentEditorInner(props: ICollaborativeDocumentEditorPro
     updatePageProperties,
     user,
     actions,
+    commentHandler,
   });
 
   const editorContainerClassNames = getEditorClassNames({
@@ -131,6 +133,7 @@ function CollaborativeDocumentEditorInner(props: ICollaborativeDocumentEditorPro
           tabIndex={tabIndex}
           provider={provider}
           state={state}
+          commentHandler={commentHandler}
         />
       </div>
     </>
