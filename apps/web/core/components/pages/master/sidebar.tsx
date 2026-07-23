@@ -33,7 +33,7 @@ export const PagesMasterSidebar = observer(function PagesMasterSidebar(props: Pr
   const { workspaceSlug, projectId } = useParams();
   const searchParams = useSearchParams();
   const pageType = getPageType(searchParams.get("type"));
-  const { fetchPagesList, getPageById, fetchParentPages } = usePageStore(storeType);
+  const { fetchPagesList, fetchParentPages } = usePageStore(storeType);
   const [expandedPageIds, setExpandedPageIds] = useState<string[]>([]);
 
   useSWR(
@@ -45,15 +45,8 @@ export const PagesMasterSidebar = observer(function PagesMasterSidebar(props: Pr
     if (!selectedPageId || !workspaceSlug || !projectId) return;
 
     const expandAncestors = async () => {
-      await fetchParentPages(workspaceSlug.toString(), projectId.toString(), selectedPageId);
-      const page = getPageById(selectedPageId);
-      const ancestorIds: string[] = [];
-      let parentId = page?.parent_id;
-
-      while (parentId) {
-        ancestorIds.push(parentId);
-        parentId = getPageById(parentId)?.parent_id ?? null;
-      }
+      const parentPages = await fetchParentPages(workspaceSlug.toString(), projectId.toString(), selectedPageId);
+      const ancestorIds = (parentPages ?? []).map((page) => page.id).filter((id): id is string => Boolean(id));
 
       if (ancestorIds.length > 0) {
         setExpandedPageIds((prev) => Array.from(new Set([...prev, ...ancestorIds])));
@@ -61,7 +54,7 @@ export const PagesMasterSidebar = observer(function PagesMasterSidebar(props: Pr
     };
 
     expandAncestors();
-  }, [selectedPageId, workspaceSlug, projectId, fetchParentPages, getPageById]);
+  }, [selectedPageId, workspaceSlug, projectId, fetchParentPages]);
 
   if (!workspaceSlug || !projectId) return null;
 
