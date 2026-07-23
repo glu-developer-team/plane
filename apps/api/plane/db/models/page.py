@@ -14,6 +14,7 @@ from django.db import models
 from plane.utils.html_processor import strip_tags
 
 from .base import BaseModel
+from .project import ProjectBaseModel
 
 
 def get_view_props():
@@ -153,6 +154,31 @@ class ProjectPage(BaseModel):
 
     def __str__(self):
         return f"{self.project.name} {self.page.name}"
+
+
+class PageComment(ProjectBaseModel):
+    page = models.ForeignKey(Page, on_delete=models.CASCADE, related_name="comments")
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="page_comments",
+    )
+    comment = models.TextField()
+    selected_text = models.TextField()
+    selection_from = models.PositiveIntegerField(null=True, blank=True)
+    selection_to = models.PositiveIntegerField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Page Comment"
+        verbose_name_plural = "Page Comments"
+        db_table = "page_comments"
+        ordering = ("created_at",)
+        indexes = [
+            models.Index(fields=["page", "created_at"], name="page_comment_page_created_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.page.name} - {self.actor.email}"
 
 
 class PageVersion(BaseModel):

@@ -182,6 +182,17 @@ export const getEditorRefHelpers = (args: TArgs): EditorRefApi => {
       const selection = nodesArray.join("");
       return selection;
     },
+    getSelection: () => {
+      if (!editor) return null;
+
+      const { from, to, empty } = editor.state.selection;
+      if (empty) return null;
+
+      const text = editor.state.doc.textBetween(from, to, "\n").trim();
+      if (!text) return null;
+
+      return { from, to, text };
+    },
     insertText: (contentHTML, insertOnNextLine) => {
       if (!editor) return;
       const { from, to, empty } = editor.state.selection;

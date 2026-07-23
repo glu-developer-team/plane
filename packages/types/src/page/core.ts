@@ -6,6 +6,7 @@
 
 import type { TLogoProps } from "../common";
 import type { EPageAccess } from "../enums";
+import type { IUserLite } from "../users";
 import type { TPageExtended } from "./extended";
 
 export type TPage = {
@@ -69,6 +70,23 @@ export type TPageVersion = {
   updated_at: string;
   updated_by: string;
   workspace: string;
+};
+
+export type TPageComment = {
+  id: string;
+  page: string;
+  project: string;
+  workspace: string;
+  actor: string;
+  actor_detail: IUserLite;
+  comment: string;
+  selected_text: string;
+  selection_from: number | null;
+  selection_to: number | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
 };
 
 export type TDocumentPayload = {

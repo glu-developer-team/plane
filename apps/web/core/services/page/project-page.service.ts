@@ -6,7 +6,7 @@
 
 // types
 import { API_BASE_URL } from "@plane/constants";
-import type { TDocumentPayload, TPage } from "@plane/types";
+import type { TDocumentPayload, TPage, TPageComment } from "@plane/types";
 // helpers
 // services
 import { APIService } from "@/services/api.service";
@@ -200,6 +200,27 @@ export class ProjectPageService extends APIService {
   async fetchParentPages(workspaceSlug: string, projectId: string, pageId: string): Promise<TPage[]> {
     return this.get(`/api/workspaces/${workspaceSlug}/projects/${projectId}/pages/${pageId}/parent-pages/`)
       .then((response) => (response?.data ?? []).map(normalizePage))
+      .catch((error) => {
+        throw error?.response?.data;
+      });
+  }
+
+  async fetchComments(workspaceSlug: string, projectId: string, pageId: string): Promise<TPageComment[]> {
+    return this.get(`/api/workspaces/${workspaceSlug}/projects/${projectId}/pages/${pageId}/comments/`)
+      .then((response) => response?.data ?? [])
+      .catch((error) => {
+        throw error?.response?.data;
+      });
+  }
+
+  async createComment(
+    workspaceSlug: string,
+    projectId: string,
+    pageId: string,
+    data: Pick<TPageComment, "comment" | "selected_text" | "selection_from" | "selection_to">
+  ): Promise<TPageComment> {
+    return this.post(`/api/workspaces/${workspaceSlug}/projects/${projectId}/pages/${pageId}/comments/`, data)
+      .then((response) => response?.data)
       .catch((error) => {
         throw error?.response?.data;
       });

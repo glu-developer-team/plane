@@ -45,6 +45,7 @@ import type { TPageInstance } from "@/store/pages/base-page";
 import { PageContentLoader } from "../loaders/page-content-loader";
 import { PageEditorHeaderRoot } from "./header";
 import { PageContentBrowser } from "./summary";
+import { PageComments } from "./page-comments";
 
 export type TEditorBodyConfig = {
   fileHandler: TFileHandler;
@@ -297,6 +298,16 @@ export const PageEditorBody = observer(function PageEditorBody(props: Props) {
             extendedEditorProps={extendedEditorProps}
             isFetchingFallbackBinary={isFetchingFallbackBinary}
           />
+          {projectId && (
+            <div className={blockWidthClassName}>
+              <PageComments
+                editorRef={editorForwardRef}
+                pageId={pageId}
+                projectId={projectId}
+                workspaceSlug={workspaceSlug}
+              />
+            </div>
+          )}
         </div>
       </div>
     </Row>

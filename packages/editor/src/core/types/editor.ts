@@ -128,6 +128,7 @@ export type CoreEditorRefApi = {
   getMarkDown: () => string;
   copyMarkdownToClipboard: () => void;
   getSelectedText: () => string | null;
+  getSelection: () => { from: number; to: number; text: string } | null;
   insertText: (contentHTML: string, insertOnNextLine?: boolean) => void;
   isAnyDropbarOpen: () => boolean;
   isEditorReadyToDiscard: () => boolean;

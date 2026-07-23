@@ -14,12 +14,14 @@ from plane.utils.content_validator import (
 )
 from plane.db.models import (
     Page,
+    PageComment,
     PageLabel,
     Label,
     ProjectPage,
     Project,
     PageVersion,
 )
+from .user import UserLiteSerializer
 
 
 class PageSerializer(BaseSerializer):
@@ -136,6 +138,57 @@ class PageDetailSerializer(PageSerializer):
 
     class Meta(PageSerializer.Meta):
         fields = PageSerializer.Meta.fields + ["description_html"]
+
+
+class PageCommentSerializer(BaseSerializer):
+    actor_detail = UserLiteSerializer(read_only=True, source="actor")
+
+    class Meta:
+        model = PageComment
+        fields = [
+            "id",
+            "page",
+            "project",
+            "workspace",
+            "actor",
+            "actor_detail",
+            "comment",
+            "selected_text",
+            "selection_from",
+            "selection_to",
+            "created_at",
+            "updated_at",
+            "created_by",
+            "updated_by",
+        ]
+        read_only_fields = [
+            "id",
+            "page",
+            "project",
+            "workspace",
+            "actor",
+            "actor_detail",
+            "created_at",
+            "updated_at",
+            "created_by",
+            "updated_by",
+        ]
+
+    def validate_comment(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("Comment cannot be empty.")
+        if len(value) > 5000:
+            raise serializers.ValidationError("Comment cannot exceed 5000 characters.")
+        return value
+
+    def validate_selected_text(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("Select text on the page before commenting.")
+        if len(value) > 5000:
+            raise serializers.ValidationError("Selected text cannot exceed 5000 characters.")
+        return value
 
 
 class PageLiteSerializer(BaseSerializer):
