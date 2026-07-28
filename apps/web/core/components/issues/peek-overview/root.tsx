@@ -51,10 +51,30 @@ export const IssuePeekOverview = observer(function IssuePeekOverview(props: IWor
   const {
     peekIssue,
     setPeekIssue,
-    issue: { fetchIssue },
+    issue: { fetchIssue, getIssueById },
     fetchActivities,
   } = useIssueDetail(issueServiceType);
   const { issues } = useIssues(issuesStoreType);
+  const { issues: projectIssues } = useIssues(EIssuesStoreType.PROJECT);
+  const { issues: epicIssues } = useIssues(EIssuesStoreType.EPIC);
+
+  /**
+   * A peek can be opened from an Epic screen for a regular child work item (and
+   * vice versa). The surrounding screen's store type must not decide which API
+   * endpoint mutates the peeked work item.
+   */
+  const getMutationStore = useCallback(
+    (issueId: string) => {
+      const issue = getIssueById(issueId);
+
+      if (!issue) return issues;
+      if (issue.is_epic) return epicIssues;
+      if (issueServiceType === EIssueServiceType.EPICS) return projectIssues;
+
+      return issues;
+    },
+    [epicIssues, getIssueById, issueServiceType, issues, projectIssues]
+  );
 
   useWorkItemProperties(peekIssue?.projectId, peekIssue?.workspaceSlug, peekIssue?.issueId, issueServiceType);
   // state
@@ -77,8 +97,9 @@ export const IssuePeekOverview = observer(function IssuePeekOverview(props: IWor
         }
       },
       update: async (workspaceSlug: string, projectId: string, issueId: string, data: Partial<TIssue>) => {
-        if (issues?.updateIssue) {
-          await issues
+        const mutationStore = getMutationStore(issueId);
+        if (mutationStore?.updateIssue) {
+          await mutationStore
             .updateIssue(workspaceSlug, projectId, issueId, data)
             .then(async () => {
               fetchActivities(workspaceSlug, projectId, issueId);
@@ -95,10 +116,12 @@ export const IssuePeekOverview = observer(function IssuePeekOverview(props: IWor
       },
       remove: async (workspaceSlug: string, projectId: string, issueId: string) => {
         try {
-          return issues?.removeIssue(workspaceSlug, projectId, issueId).then(() => {
-            removeRoutePeekId();
-            return;
-          });
+          return getMutationStore(issueId)
+            ?.removeIssue(workspaceSlug, projectId, issueId)
+            .then(() => {
+              removeRoutePeekId();
+              return;
+            });
         } catch (_error) {
           setToast({
             title: t("toast.error"),
@@ -109,8 +132,9 @@ export const IssuePeekOverview = observer(function IssuePeekOverview(props: IWor
       },
       archive: async (workspaceSlug: string, projectId: string, issueId: string) => {
         try {
-          if (!issues?.archiveIssue) return;
-          await issues.archiveIssue(workspaceSlug, projectId, issueId);
+          const mutationStore = getMutationStore(issueId);
+          if (!mutationStore?.archiveIssue) return;
+          await mutationStore.archiveIssue(workspaceSlug, projectId, issueId);
         } catch (archiveError) {
           console.error("Error archiving the issue", archiveError);
         }
@@ -133,7 +157,7 @@ export const IssuePeekOverview = observer(function IssuePeekOverview(props: IWor
       },
       addCycleToIssue: async (workspaceSlug: string, projectId: string, cycleId: string, issueId: string) => {
         try {
-          await issues.addCycleToIssue(workspaceSlug, projectId, cycleId, issueId);
+          await getMutationStore(issueId).addCycleToIssue(workspaceSlug, projectId, cycleId, issueId);
           fetchActivities(workspaceSlug, projectId, issueId);
         } catch (_error) {
           setToast({
@@ -145,7 +169,8 @@ export const IssuePeekOverview = observer(function IssuePeekOverview(props: IWor
       },
       addIssueToCycle: async (workspaceSlug: string, projectId: string, cycleId: string, issueIds: string[]) => {
         try {
-          await issues.addIssueToCycle(workspaceSlug, projectId, cycleId, issueIds);
+          const mutationStore = issueIds[0] ? getMutationStore(issueIds[0]) : issues;
+          await mutationStore.addIssueToCycle(workspaceSlug, projectId, cycleId, issueIds);
         } catch (_error) {
           setToast({
             type: TOAST_TYPE.ERROR,
@@ -156,7 +181,12 @@ export const IssuePeekOverview = observer(function IssuePeekOverview(props: IWor
       },
       removeIssueFromCycle: async (workspaceSlug: string, projectId: string, cycleId: string, issueId: string) => {
         try {
-          const removeFromCyclePromise = issues.removeIssueFromCycle(workspaceSlug, projectId, cycleId, issueId);
+          const removeFromCyclePromise = getMutationStore(issueId).removeIssueFromCycle(
+            workspaceSlug,
+            projectId,
+            cycleId,
+            issueId
+          );
           setPromiseToast(removeFromCyclePromise, {
             loading: t("issue.remove.cycle.loading"),
             success: {
@@ -181,7 +211,7 @@ export const IssuePeekOverview = observer(function IssuePeekOverview(props: IWor
         addModuleIds: string[],
         removeModuleIds: string[]
       ) => {
-        const promise = await issues.changeModulesInIssue(
+        const promise = await getMutationStore(issueId).changeModulesInIssue(
           workspaceSlug,
           projectId,
           issueId,
@@ -193,7 +223,12 @@ export const IssuePeekOverview = observer(function IssuePeekOverview(props: IWor
       },
       removeIssueFromModule: async (workspaceSlug: string, projectId: string, moduleId: string, issueId: string) => {
         try {
-          const removeFromModulePromise = issues.removeIssuesFromModule(workspaceSlug, projectId, moduleId, [issueId]);
+          const removeFromModulePromise = getMutationStore(issueId).removeIssuesFromModule(
+            workspaceSlug,
+            projectId,
+            moduleId,
+            [issueId]
+          );
           setPromiseToast(removeFromModulePromise, {
             loading: t("issue.remove.module.loading"),
             success: {
@@ -213,7 +248,7 @@ export const IssuePeekOverview = observer(function IssuePeekOverview(props: IWor
       },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [fetchIssue, is_draft, issues, fetchActivities, pathname, removeRoutePeekId, restoreIssue]
+    [fetchIssue, is_draft, issues, fetchActivities, pathname, removeRoutePeekId, restoreIssue, getMutationStore]
   );
 
   const { isLoading } = useSWR(
