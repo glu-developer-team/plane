@@ -256,6 +256,31 @@ class TestBacklogImportOnce:
         client.list_all_comments.assert_called_once_with("IMP-2")
         assert client.list_issues.call_args.kwargs["updated_since"] is None
 
+    def test_failing_task_does_not_block_later_tasks(self, import_setup):
+        sync, client, data, state = import_setup
+        bad = {**data, "id": 101, "issueKey": "IMP-2"}
+        good = {**data, "id": 102, "issueKey": "IMP-3"}
+        client.list_issues.return_value = [bad, good]
+        client.list_all_comments.side_effect = lambda key: (
+            (_ for _ in ()).throw(RuntimeError("boom")) if key == "IMP-2" else []
+        )
+        job = BacklogSyncJob.objects.create(project=sync.project, workspace=sync.workspace, scope="project")
+        with patch("plane.bgtasks.backlog_sync_task.backlog_client_for_sync", return_value=client):
+            backlog_pull_project_task(str(sync.project_id), str(job.id))
+        job.refresh_from_db()
+        assert job.status == "completed"
+        assert job.stats["failed"] == ["IMP-2"]
+        assert list(Issue.objects.filter(project=sync.project).values_list("external_id", flat=True)) == ["IMP-3"]
+
+    def test_imported_task_skips_backlog_comment_fetch(self, import_setup):
+        sync, client, data, state = import_setup
+        import_backlog_issue_once(sync, client, data, {})
+        client.list_all_comments.reset_mock()
+        stats = {}
+        import_backlog_issue_once(sync, client, data, stats)
+        client.list_all_comments.assert_not_called()
+        assert stats["skipped"] == 1
+
     def test_issue_pull_does_not_contact_backlog(self, import_setup):
         sync, client, data, state = import_setup
         import_backlog_issue_once(sync, client, data, {})

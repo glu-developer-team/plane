@@ -446,6 +446,8 @@ def _sync_backlog_statuses_to_plane(sync: BacklogProjectSync, client: BacklogCli
     config["status_en_overrides"] = status_en_overrides
     if import_once:
         config["ignored_status_ids"] = ignored_status_ids
+    else:
+        config.pop("ignored_status_ids", None)
     sync.config = config
     sync.save(update_fields=["config", "updated_at"])
     return status_map
@@ -772,6 +774,7 @@ def upsert_plane_issue_from_backlog(
 ) -> Issue | None:
     issue_key = backlog_issue["issueKey"]
     if is_backlog_import_once(sync):
+        # Defense in depth: never overwrite a task that was already imported.
         existing = find_imported_backlog_issue(sync, issue_key)
         if existing or issue_key in (sync.config or {}).get("imported_issue_keys", {}):
             stats["skipped"] = stats.get("skipped", 0) + 1
@@ -879,17 +882,29 @@ def find_imported_backlog_issue(sync: BacklogProjectSync, issue_key: str) -> Iss
     ).first()
 
 
+def _is_backlog_issue_imported(sync: BacklogProjectSync, issue_key: str) -> bool:
+    return issue_key in ((sync.config or {}).get("imported_issue_keys") or {}) or bool(
+        find_imported_backlog_issue(sync, issue_key)
+    )
+
+
 def import_backlog_issue_once(
     sync: BacklogProjectSync,
     client: BacklogClient,
     backlog_issue: dict[str, Any],
     stats: dict[str, Any],
 ) -> None:
+    issue_key = backlog_issue["issueKey"]
+    # Cheap unlocked check so already-imported tasks never take the row lock or hit the Backlog API.
+    if _is_backlog_issue_imported(sync, issue_key):
+        stats["skipped"] = stats.get("skipped", 0) + 1
+        return
+    # Fetch comments before taking the lock so slow Backlog calls do not block settings saves.
+    comments = client.list_all_comments(issue_key)
     # Serialize first imports, and retry the entire initial snapshot if comments fail.
     with transaction.atomic():
         locked = BacklogProjectSync.objects.select_for_update().get(id=sync.id)
         sync.config = locked.config
-        issue_key = backlog_issue["issueKey"]
         imported_keys = dict((sync.config or {}).get("imported_issue_keys") or {})
         if issue_key in imported_keys:
             stats["skipped"] = stats.get("skipped", 0) + 1
@@ -899,7 +914,7 @@ def import_backlog_issue_once(
         else:
             issue = upsert_plane_issue_from_backlog(sync, backlog_issue, stats=stats)
             issue_sync = BacklogIssueSync.objects.get(issue_id=issue.id)
-            sync_backlog_comments(sync, client, issue_sync, stats, initial_import=True)
+            sync_backlog_comments(sync, client, issue_sync, stats, initial_import=True, comments=comments)
         # Keep this tombstone even after Plane's retention job purges the issue/link.
         imported_keys[issue_key] = True
         sync.config = {**(sync.config or {}), "imported_issue_keys": imported_keys}
@@ -913,10 +928,12 @@ def sync_backlog_comments(
     stats: dict[str, Any],
     *,
     initial_import: bool = False,
+    comments: list[dict[str, Any]] | None = None,
 ) -> None:
     if is_backlog_import_once(sync) and not initial_import:
         return
-    comments = client.list_all_comments(issue_sync.backlog_issue_key)
+    if comments is None:
+        comments = client.list_all_comments(issue_sync.backlog_issue_key)
     existing_comments = set(
         BacklogCommentSync.objects.filter(issue_sync=issue_sync).values_list("backlog_comment_id", flat=True)
     )

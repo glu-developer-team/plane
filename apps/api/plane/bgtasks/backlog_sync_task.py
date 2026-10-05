@@ -244,7 +244,13 @@ def backlog_pull_project_task(project_id: str, job_id: str) -> None:
                 break
             for backlog_issue in issues:
                 if is_backlog_import_once(sync):
-                    import_backlog_issue_once(sync, client, backlog_issue, stats)
+                    # One failing task must not block every task after it on later pulls.
+                    try:
+                        import_backlog_issue_once(sync, client, backlog_issue, stats)
+                    except Exception as exc:
+                        log_exception(exc)
+                        stats.setdefault("failed", []).append(backlog_issue.get("issueKey"))
+                    _touch_job(job_id)
                     continue
                 issue = upsert_plane_issue_from_backlog(sync, backlog_issue, stats=stats)
                 issue_sync = BacklogIssueSync.objects.filter(issue_id=issue.id).first()
