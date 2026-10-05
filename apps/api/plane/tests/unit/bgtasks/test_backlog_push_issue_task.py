@@ -62,9 +62,10 @@ class TestBacklogPushIssueTask:
         mock_client.create_issue.assert_called_once()
         mock_client.update_issue.assert_not_called()
 
-    def test_legacy_issue_update_skipped_when_one_way_sync(self, backlog_setup):
+    @pytest.mark.parametrize("sync_mode", ["backlog_to_plane", "import_once"])
+    def test_legacy_issue_update_skipped_when_one_way_sync(self, backlog_setup, sync_mode):
         sync, issue = backlog_setup
-        sync.config = {"sync_mode": "backlog_to_plane"}
+        sync.config = {"sync_mode": sync_mode}
         sync.save(update_fields=["config", "updated_at"])
         mock_client = MagicMock()
 
