@@ -41,11 +41,16 @@ Product and API changes in this fork only — not in official Plane CE.
 | **Pages Public API**    | v1 CRUD for project pages (API key auth).                                                                                                                                |
 | **Mermaid**             | Diagram rendering in editor code blocks.                                                                                                                                 |
 | **R2 uploads**          | Presigned PUT to Cloudflare R2 (S3-compatible `AWS_*` env).                                                                                                              |
-| **Backlog.com**         | Per-project integration: bidirectional issue/comment sync, Markdown conversion, JP↔EN locale mapping. Settings → Integrations → Backlog.                                 |
+| **Backlog.com**         | Per-project integration: two-way sync, Backlog → Plane sync, or import each task once; Markdown conversion and JP↔EN locale mapping. Settings → Integrations → Backlog.  |
 | **GitHub PR connector** | Link PRs to work items via tags; bidirectional PR comment sync; GitHub App + webhooks. Settings → Integrations → GitHub. Env: `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`. |
 | **Self-hosted deploy**  | Local Docker build (`deploy/`), self-hosted CI — see [deploy/README.md](./deploy/README.md).                                                                             |
 
 Issues and PRs for fork-specific features: [glu-developer-team/plane/issues](https://github.com/glu-developer-team/plane/issues).
+
+Backlog's **Import each task once** mode imports unseen tasks with their initial comments and history.
+Previously linked tasks are left unchanged, including when switching from another sync mode.
+Plane owns subsequent edits, status changes, comments, history, and deletions; nothing is pushed to Backlog.
+New Backlog tasks can still be imported when opening the project. Existing Plane states are preserved.
 
 ## 🚀 Installation
 

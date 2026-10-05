@@ -18,6 +18,8 @@ from plane.utils.backlog.sync import (
     ensure_status_map,
     get_enabled_backlog_sync,
     html_to_markdown,
+    import_backlog_issue_once,
+    is_backlog_import_once,
     is_backlog_push_enabled,
     parse_backlog_datetime,
     plane_issue_to_backlog_payload,
@@ -227,7 +229,7 @@ def backlog_pull_project_task(project_id: str, job_id: str) -> None:
             sync.save(update_fields=["backlog_project_id", "updated_at"])
 
         ensure_status_map(sync, client)
-        updated_since = _project_pull_updated_since(project_id)
+        updated_since = None if is_backlog_import_once(sync) else _project_pull_updated_since(project_id)
 
         stats = {"created": 0, "updated": 0, "comments_created": 0, "activities_created": 0, "updated_issue_ids": []}
         offset = 0
@@ -241,6 +243,9 @@ def backlog_pull_project_task(project_id: str, job_id: str) -> None:
             if not issues:
                 break
             for backlog_issue in issues:
+                if is_backlog_import_once(sync):
+                    import_backlog_issue_once(sync, client, backlog_issue, stats)
+                    continue
                 issue = upsert_plane_issue_from_backlog(sync, backlog_issue, stats=stats)
                 issue_sync = BacklogIssueSync.objects.filter(issue_id=issue.id).first()
                 if issue_sync:
@@ -267,6 +272,10 @@ def backlog_pull_issue_task(project_id: str, issue_id: str, job_id: str) -> None
         sync = get_enabled_backlog_sync(project_id)
         if not sync:
             _mark_job_failed(job_id, "Backlog sync not configured")
+            return
+
+        if is_backlog_import_once(sync):
+            _mark_job_completed(job, {"skipped": 1})
             return
 
         client = backlog_client_for_sync(sync)

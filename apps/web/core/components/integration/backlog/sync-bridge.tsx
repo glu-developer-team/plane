@@ -57,7 +57,7 @@ export const BacklogIssueSyncBridge = observer(function BacklogIssueSyncBridge({
   projectId,
   issueId,
 }: BacklogIssueSyncBridgeProps) {
-  const { enabled } = useBacklogSyncConfig(workspaceSlug, projectId);
+  const { enabled, config } = useBacklogSyncConfig(workspaceSlug, projectId);
   const {
     issue: { fetchIssue },
     comment: { refetchComments },
@@ -73,8 +73,8 @@ export const BacklogIssueSyncBridge = observer(function BacklogIssueSyncBridge({
   useBacklogPullSync({
     workspaceSlug,
     projectId,
-    enabled,
     scope: "issue",
+    enabled: enabled && config?.sync_mode !== "import_once",
     issueId,
     onComplete: refreshIssue,
   });

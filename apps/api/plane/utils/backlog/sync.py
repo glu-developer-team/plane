@@ -11,6 +11,7 @@ from typing import Any
 from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 from django.utils.html import strip_tags
+from django.db import transaction
 
 from plane.db.models import (
     BacklogActivitySync,
@@ -77,7 +78,8 @@ CHANGELOG_FIELD_TO_PLANE = {
 
 SYNC_MODE_BACKLOG_TO_PLANE = "backlog_to_plane"
 SYNC_MODE_BIDIRECTIONAL = "bidirectional"
-SYNC_MODE_CHOICES = (SYNC_MODE_BACKLOG_TO_PLANE, SYNC_MODE_BIDIRECTIONAL)
+SYNC_MODE_IMPORT_ONCE = "import_once"
+SYNC_MODE_CHOICES = (SYNC_MODE_BACKLOG_TO_PLANE, SYNC_MODE_BIDIRECTIONAL, SYNC_MODE_IMPORT_ONCE)
 DEFAULT_SYNC_MODE = SYNC_MODE_BIDIRECTIONAL
 BACKLOG_SYNC_JOB_TIMEOUT = timedelta(minutes=30)
 BACKLOG_SYNC_JOB_TIMEOUT_ERROR = "Backlog sync job timed out before completion"
@@ -92,6 +94,10 @@ def get_sync_mode(sync: BacklogProjectSync) -> str:
 
 def is_backlog_push_enabled(sync: BacklogProjectSync) -> bool:
     return get_sync_mode(sync) == SYNC_MODE_BIDIRECTIONAL
+
+
+def is_backlog_import_once(sync: BacklogProjectSync) -> bool:
+    return get_sync_mode(sync) == SYNC_MODE_IMPORT_ONCE
 
 
 def get_enabled_backlog_sync(project_id) -> BacklogProjectSync | None:
@@ -271,7 +277,7 @@ def enqueue_backlog_push_comment(comment_id: str) -> None:
 
 
 def ensure_status_map(sync: BacklogProjectSync, client: BacklogClient) -> dict[str, str]:
-    """Backlog statuses are canonical — mirror them onto Plane states before every sync."""
+    """Mirror statuses for sync modes; import mode preserves Plane-owned states."""
     return sync_backlog_statuses_to_plane(sync, client)
 
 
@@ -293,6 +299,15 @@ def backlog_status_to_plane_group(name: str, index: int, total: int) -> str:
 
 
 def sync_backlog_statuses_to_plane(sync: BacklogProjectSync, client: BacklogClient) -> dict[str, str]:
+    if is_backlog_import_once(sync):
+        with transaction.atomic():
+            locked = BacklogProjectSync.objects.select_for_update().get(id=sync.id)
+            sync.config = locked.config
+            return _sync_backlog_statuses_to_plane(sync, client)
+    return _sync_backlog_statuses_to_plane(sync, client)
+
+
+def _sync_backlog_statuses_to_plane(sync: BacklogProjectSync, client: BacklogClient) -> dict[str, str]:
     try:
         statuses = client.get_statuses(sync.backlog_project_key)
     except BacklogAPIError:
@@ -308,9 +323,13 @@ def sync_backlog_statuses_to_plane(sync: BacklogProjectSync, client: BacklogClie
 
     config = sync.config or {}
     status_en_overrides = dict(config.get("status_en_overrides") or {})
+    import_once = is_backlog_import_once(sync)
+    ignored_status_ids = dict(config.get("ignored_status_ids") or {})
 
     for index, status in enumerate(statuses):
         sid = str(status["id"])
+        if import_once and sid in ignored_status_ids:
+            continue
         backlog_status_ids[sid] = status["id"]
         backlog_status_order.append(sid)
         ja_name = (status.get("name") or sid).strip()
@@ -337,19 +356,49 @@ def sync_backlog_statuses_to_plane(sync: BacklogProjectSync, client: BacklogClie
             deleted_at__isnull=True,
         ).first()
 
-        if not state:
-            state = State.all_state_objects.filter(
+        if not state and import_once:
+            # A local state may have been reused or renamed after the initial import.
+            mapped_id = (config.get("status_map") or {}).get(sid)
+            if mapped_id:
+                state = State.all_state_objects.filter(
+                    id=mapped_id, project_id=sync.project_id, deleted_at__isnull=True
+                ).first()
+            deleted_state = State.all_objects.filter(
                 project_id=sync.project_id,
-                name=en_name,
-                deleted_at__isnull=True,
-            ).exclude(external_source=BACKLOG_EXTERNAL_SOURCE).first()
-        if not state and ja_name != en_name:
-            state = State.all_state_objects.filter(
-                project_id=sync.project_id,
-                name=ja_name,
-                deleted_at__isnull=True,
-            ).exclude(external_source=BACKLOG_EXTERNAL_SOURCE).first()
+                deleted_at__isnull=False,
+                external_source=BACKLOG_EXTERNAL_SOURCE,
+                external_id=sid,
+            ).exists()
+            if deleted_state or (
+                mapped_id and State.all_objects.filter(id=mapped_id, deleted_at__isnull=False).exists()
+            ):
+                ignored_status_ids[sid] = True
+                continue
 
+        if not state:
+            state = (
+                State.all_state_objects.filter(
+                    project_id=sync.project_id,
+                    name=en_name,
+                    deleted_at__isnull=True,
+                )
+                .exclude(external_source=BACKLOG_EXTERNAL_SOURCE)
+                .first()
+            )
+        if not state and ja_name != en_name:
+            state = (
+                State.all_state_objects.filter(
+                    project_id=sync.project_id,
+                    name=ja_name,
+                    deleted_at__isnull=True,
+                )
+                .exclude(external_source=BACKLOG_EXTERNAL_SOURCE)
+                .first()
+            )
+
+        if state and import_once:
+            status_map[sid] = str(state.id)
+            continue
         if state:
             for field, value in state_defaults.items():
                 setattr(state, field, value)
@@ -371,7 +420,8 @@ def sync_backlog_statuses_to_plane(sync: BacklogProjectSync, client: BacklogClie
             state = State(
                 project_id=sync.project_id,
                 workspace_id=sync.workspace_id,
-                default=index == 0,
+                default=index == 0
+                and (not import_once or not State.objects.filter(project_id=sync.project_id, default=True).exists()),
                 created_by_id=sync.created_by_id,
                 **state_defaults,
             )
@@ -379,7 +429,7 @@ def sync_backlog_statuses_to_plane(sync: BacklogProjectSync, client: BacklogClie
 
         status_map[sid] = str(state.id)
 
-    if statuses:
+    if statuses and not import_once:
         State.objects.filter(project_id=sync.project_id, default=True).exclude(
             external_source=BACKLOG_EXTERNAL_SOURCE
         ).update(default=False)
@@ -394,6 +444,8 @@ def sync_backlog_statuses_to_plane(sync: BacklogProjectSync, client: BacklogClie
     config["backlog_status_order"] = backlog_status_order
     config["backlog_status_labels"] = backlog_status_labels
     config["status_en_overrides"] = status_en_overrides
+    if import_once:
+        config["ignored_status_ids"] = ignored_status_ids
     sync.config = config
     sync.save(update_fields=["config", "updated_at"])
     return status_map
@@ -703,9 +755,7 @@ def plane_issue_to_backlog_payload(issue: Issue, sync: BacklogProjectSync, clien
     if issue.start_date:
         payload["startDate"] = issue.start_date.isoformat()
     assignee = (
-        IssueAssignee.objects.filter(issue_id=issue.id, deleted_at__isnull=True)
-        .select_related("assignee")
-        .first()
+        IssueAssignee.objects.filter(issue_id=issue.id, deleted_at__isnull=True).select_related("assignee").first()
     )
     if assignee and assignee.assignee:
         assignee_id = resolve_backlog_assignee_id(client, assignee.assignee)
@@ -719,8 +769,13 @@ def upsert_plane_issue_from_backlog(
     backlog_issue: dict[str, Any],
     *,
     stats: dict[str, Any],
-) -> Issue:
+) -> Issue | None:
     issue_key = backlog_issue["issueKey"]
+    if is_backlog_import_once(sync):
+        existing = find_imported_backlog_issue(sync, issue_key)
+        if existing or issue_key in (sync.config or {}).get("imported_issue_keys", {}):
+            stats["skipped"] = stats.get("skipped", 0) + 1
+            return existing
     issue_sync = (
         BacklogIssueSync.objects.filter(project_id=sync.project_id, backlog_issue_key=issue_key)
         .select_related("issue")
@@ -810,12 +865,57 @@ def upsert_plane_issue_from_backlog(
     return issue
 
 
+def find_imported_backlog_issue(sync: BacklogProjectSync, issue_key: str) -> Issue | None:
+    """Include deleted records so a Plane deletion does not trigger another import."""
+    link = (
+        BacklogIssueSync.all_objects.filter(project_id=sync.project_id, backlog_issue_key=issue_key)
+        .select_related("issue")
+        .first()
+    )
+    if link:
+        return link.issue
+    return Issue.all_objects.filter(
+        project_id=sync.project_id, external_source=BACKLOG_EXTERNAL_SOURCE, external_id=issue_key
+    ).first()
+
+
+def import_backlog_issue_once(
+    sync: BacklogProjectSync,
+    client: BacklogClient,
+    backlog_issue: dict[str, Any],
+    stats: dict[str, Any],
+) -> None:
+    # Serialize first imports, and retry the entire initial snapshot if comments fail.
+    with transaction.atomic():
+        locked = BacklogProjectSync.objects.select_for_update().get(id=sync.id)
+        sync.config = locked.config
+        issue_key = backlog_issue["issueKey"]
+        imported_keys = dict((sync.config or {}).get("imported_issue_keys") or {})
+        if issue_key in imported_keys:
+            stats["skipped"] = stats.get("skipped", 0) + 1
+            return
+        if find_imported_backlog_issue(sync, issue_key):
+            stats["skipped"] = stats.get("skipped", 0) + 1
+        else:
+            issue = upsert_plane_issue_from_backlog(sync, backlog_issue, stats=stats)
+            issue_sync = BacklogIssueSync.objects.get(issue_id=issue.id)
+            sync_backlog_comments(sync, client, issue_sync, stats, initial_import=True)
+        # Keep this tombstone even after Plane's retention job purges the issue/link.
+        imported_keys[issue_key] = True
+        sync.config = {**(sync.config or {}), "imported_issue_keys": imported_keys}
+        sync.save(update_fields=["config", "updated_at"])
+
+
 def sync_backlog_comments(
     sync: BacklogProjectSync,
     client: BacklogClient,
     issue_sync: BacklogIssueSync,
     stats: dict[str, Any],
+    *,
+    initial_import: bool = False,
 ) -> None:
+    if is_backlog_import_once(sync) and not initial_import:
+        return
     comments = client.list_all_comments(issue_sync.backlog_issue_key)
     existing_comments = set(
         BacklogCommentSync.objects.filter(issue_sync=issue_sync).values_list("backlog_comment_id", flat=True)

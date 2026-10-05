@@ -55,7 +55,7 @@ function BacklogIntegrationSettingsPage({ params }: Route.ComponentProps) {
     setSpaceHost(config.space_host || "");
     setProjectKey(config.backlog_project_key || "");
     setIsEnabled(config.is_enabled ?? true);
-    setSyncMode(config.sync_mode === "backlog_to_plane" ? "backlog_to_plane" : "bidirectional");
+    setSyncMode(config.sync_mode ?? "bidirectional");
     setDefaultEnglishOverrides(buildDefaultEnglishOverrides(config));
     setCustomLocaleEntries(buildCustomOnlyEntries(config));
     setStatusLocaleEntries(cloneStatusEntries(config.status_locale_entries));
@@ -201,6 +201,24 @@ function BacklogIntegrationSettingsPage({ params }: Route.ComponentProps) {
               {t("project_settings.integrations.backlog.sync_mode")}
             </legend>
             <div className="mt-2 space-y-2">
+              <div className="text-sm flex cursor-pointer items-start gap-2 rounded-md border border-subtle p-3">
+                <input
+                  type="radio"
+                  id="backlog-sync-mode-import-once"
+                  name="backlog-sync-mode"
+                  className="mt-0.5"
+                  checked={syncMode === "import_once"}
+                  onChange={() => setSyncMode("import_once")}
+                />
+                <label htmlFor="backlog-sync-mode-import-once" className="cursor-pointer">
+                  <span className="font-medium text-primary">
+                    {t("project_settings.integrations.backlog.sync_mode_import_once")}
+                  </span>
+                  <span className="mt-0.5 block text-secondary">
+                    {t("project_settings.integrations.backlog.sync_mode_import_once_hint")}
+                  </span>
+                </label>
+              </div>
               <div className="text-sm flex cursor-pointer items-start gap-2 rounded-md border border-subtle p-3">
                 <input
                   type="radio"

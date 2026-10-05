@@ -3,11 +3,17 @@
 # See the LICENSE file for details.
 
 from rest_framework import serializers
+from django.db import transaction
 
 from plane.db.models import BacklogProjectSync
 from plane.utils.backlog.client import BacklogAPIError, BacklogClient, normalize_space_host
-from plane.utils.backlog.locale_map import DEFAULT_JA_TO_EN, looks_like_partial_translation, resolve_status_english, translate_status_name
-from plane.utils.backlog.sync import DEFAULT_SYNC_MODE, SYNC_MODE_BIDIRECTIONAL, SYNC_MODE_BACKLOG_TO_PLANE, get_sync_mode
+from plane.utils.backlog.locale_map import (
+    DEFAULT_JA_TO_EN,
+    looks_like_partial_translation,
+    resolve_status_english,
+    translate_status_name,
+)
+from plane.utils.backlog.sync import DEFAULT_SYNC_MODE, SYNC_MODE_CHOICES, get_sync_mode, is_backlog_import_once
 from plane.utils.encryption import decrypt_value, encrypt_value, mask_api_key
 
 
@@ -62,9 +68,7 @@ class BacklogProjectSyncSerializer(serializers.ModelSerializer):
         ]
 
     def get_enabled(self, obj: BacklogProjectSync) -> bool:
-        return bool(
-            obj.is_enabled and obj.space_host and obj.api_key_encrypted and obj.backlog_project_key
-        )
+        return bool(obj.is_enabled and obj.space_host and obj.api_key_encrypted and obj.backlog_project_key)
 
     def get_api_key_set(self, obj: BacklogProjectSync) -> bool:
         return bool(obj.api_key_encrypted)
@@ -116,7 +120,7 @@ class BacklogProjectSyncSerializer(serializers.ModelSerializer):
 class BacklogProjectSyncWriteSerializer(BacklogProjectSyncSerializer):
     test_connection = serializers.BooleanField(default=True, write_only=True)
     sync_mode = serializers.ChoiceField(
-        choices=[SYNC_MODE_BACKLOG_TO_PLANE, SYNC_MODE_BIDIRECTIONAL],
+        choices=SYNC_MODE_CHOICES,
         required=False,
         write_only=True,
     )
@@ -142,8 +146,12 @@ class BacklogProjectSyncWriteSerializer(BacklogProjectSyncSerializer):
     def update(self, instance, validated_data):
         return self._save_sync(validated_data, instance)
 
+    @transaction.atomic
     def _save_sync(self, validated_data, instance=None):
         from plane.db.models import State
+
+        if instance is not None:
+            instance = BacklogProjectSync.objects.select_for_update().get(id=instance.id)
 
         api_key = validated_data.pop("api_key", None)
         test_connection = validated_data.pop("test_connection", True)
@@ -205,7 +213,7 @@ class BacklogProjectSyncWriteSerializer(BacklogProjectSyncSerializer):
                 if status_id in labels:
                     labels[status_id] = {**labels[status_id], "en": english}
                 state_id = status_map.get(status_id)
-                if state_id:
+                if state_id and not is_backlog_import_once(instance):
                     State.objects.filter(id=state_id, project_id=instance.project_id).update(name=english[:255])
             config["status_en_overrides"] = overrides
             config["backlog_status_labels"] = labels

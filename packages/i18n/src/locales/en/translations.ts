@@ -1849,7 +1849,10 @@ export default {
         project_key: "Backlog project key",
         project_key_placeholder: "e.g. FUSETTER_PRJ",
         enabled: "Enable sync",
-        sync_mode: "Sync direction",
+        sync_mode: "Sync mode",
+        sync_mode_import_once: "Import each task once",
+        sync_mode_import_once_hint:
+          "Import new Backlog tasks with their comments and history once. Existing tasks stay unchanged; Plane manages all later changes and nothing is sent back to Backlog.",
         sync_mode_backlog_to_plane: "Backlog → Plane only",
         sync_mode_backlog_to_plane_hint:
           "Pull issues and comments from Backlog. Changes in Plane are not sent to Backlog.",

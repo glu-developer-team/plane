@@ -47,7 +47,7 @@ export interface IBacklogStatusLocaleEntry {
   english: string;
 }
 
-export type TBacklogSyncMode = "backlog_to_plane" | "bidirectional";
+export type TBacklogSyncMode = "backlog_to_plane" | "bidirectional" | "import_once";
 
 export interface IBacklogProjectSync {
   id?: string;
