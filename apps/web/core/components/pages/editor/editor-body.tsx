@@ -60,6 +60,7 @@ export type TEditorBodyHandlers = {
 
 type Props = {
   config: TEditorBodyConfig;
+  commentAnchorsReady: boolean;
   editorReady: boolean;
   editorForwardRef: React.RefObject<EditorRefApi>;
   handleEditorReady: (status: boolean) => void;
@@ -80,6 +81,7 @@ type Props = {
 export const PageEditorBody = observer(function PageEditorBody(props: Props) {
   const {
     config,
+    commentAnchorsReady,
     editorForwardRef,
     handleEditorReady,
     handleOpenNavigationPane,
@@ -317,6 +319,7 @@ export const PageEditorBody = observer(function PageEditorBody(props: Props) {
               <PageComments
                 ref={pageCommentsRef}
                 editorRef={editorForwardRef}
+                commentAnchorsReady={commentAnchorsReady}
                 pageId={pageId}
                 projectId={projectId}
                 workspaceSlug={workspaceSlug}

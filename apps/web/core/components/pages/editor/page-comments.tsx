@@ -15,6 +15,7 @@ import { ProjectPageService } from "@/services/page";
 
 type Props = {
   editorRef: React.RefObject<EditorRefApi>;
+  commentAnchorsReady: boolean;
   pageId: string;
   projectId: string;
   workspaceSlug: string;
@@ -40,7 +41,7 @@ const CommentAuthor = ({ item }: { item: TPageComment }) => (
 );
 
 export const PageComments = forwardRef<TPageCommentsRef, Props>(function PageComments(
-  { editorRef, pageId, projectId, workspaceSlug },
+  { editorRef, commentAnchorsReady, pageId, projectId, workspaceSlug },
   ref
 ) {
   const service = useMemo(() => new ProjectPageService(), []);
@@ -84,6 +85,20 @@ export const PageComments = forwardRef<TPageCommentsRef, Props>(function PageCom
     setInlineComment("");
     void fetchComments();
   }, [fetchComments]);
+
+  useEffect(() => {
+    if (!commentAnchorsReady || isLoading) return;
+
+    comments.forEach((comment) => {
+      if (!comment.is_inline) return;
+      editorRef.current?.restorePageCommentMark(
+        comment.id,
+        comment.selected_text,
+        comment.selection_from,
+        comment.selection_to
+      );
+    });
+  }, [commentAnchorsReady, comments, editorRef, isLoading]);
 
   useImperativeHandle(
     ref,

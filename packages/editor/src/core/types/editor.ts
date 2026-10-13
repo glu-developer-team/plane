@@ -128,6 +128,12 @@ export type TEditorCommentHandler = {
 
 export type CoreEditorRefApi = {
   addPageCommentMark: (commentId: string, from: number, to: number) => boolean;
+  restorePageCommentMark: (
+    commentId: string,
+    selectedText: string,
+    selectionFrom: number | null,
+    selectionTo: number | null
+  ) => boolean;
   blur: () => void;
   clearEditor: (emitUpdate?: boolean) => void;
   createSelectionAtCursorPosition: () => void;

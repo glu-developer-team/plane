@@ -21,6 +21,7 @@ import type { EditorRefApi, IEditorProps, TEditorCommands } from "@/types";
 import { getParagraphCount } from "./common";
 import { insertContentAtSavedSelection } from "./insert-content-at-cursor-position";
 import { scrollSummary, scrollToHeadingBySlug, scrollToNodeViaDOMCoordinates } from "./scroll-to-node";
+import { resolvePageCommentRange } from "./page-comment-range";
 
 type TArgs = Pick<IEditorProps, "getEditorMetaData"> & {
   editor: Editor | null;
@@ -34,6 +35,15 @@ export const getEditorRefHelpers = (args: TArgs): EditorRefApi => {
     addPageCommentMark: (commentId, from, to) => {
       if (!editor || from >= to || from < 0 || to > editor.state.doc.content.size) return false;
       return editor.chain().focus().setTextSelection({ from, to }).setMark("pageComment", { commentId }).run();
+    },
+    restorePageCommentMark: (commentId, selectedText, selectionFrom, selectionTo) => {
+      if (!editor) return false;
+      const range = resolvePageCommentRange(editor.state.doc, selectedText, selectionFrom, selectionTo);
+      const markType = editor.schema.marks.pageComment;
+      if (!range || !markType) return false;
+
+      editor.view.dispatch(editor.state.tr.addMark(range.from, range.to, markType.create({ commentId })));
+      return true;
     },
     blur: () => editor?.commands.blur(),
     clearEditor: (emitUpdate = false) => {
