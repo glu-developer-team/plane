@@ -121,6 +121,11 @@ export const PageRoot = observer(function PageRoot(props: TPageRootProps) {
     customRealtimeEventHandlers?.error?.(params);
   };
 
+  const commentAnchorsReady =
+    editorReady &&
+    !isFetchingFallbackBinary &&
+    Boolean(collaborationState?.isServerSynced || collaborationState?.isServerDisconnected);
+
   const mergedCustomEventHandlers: TCustomEventHandlers = {
     ...customRealtimeEventHandlers,
     error: errorHandler,
@@ -172,6 +177,7 @@ export const PageRoot = observer(function PageRoot(props: TPageRootProps) {
         {showContentTooLargeBanner && <ContentLimitBanner className="px-page-x" />}
         <PageEditorBody
           config={config}
+          commentAnchorsReady={commentAnchorsReady}
           customRealtimeEventHandlers={mergedCustomEventHandlers}
           editorReady={editorReady}
           editorForwardRef={editorRef}
