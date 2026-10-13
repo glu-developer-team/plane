@@ -51,6 +51,14 @@ export const PageComments = forwardRef<TPageCommentsRef, Props>(function PageCom
   const [popover, setPopover] = useState<TPopover | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const updateViewportSize = () => setViewportSize({ width: window.innerWidth, height: window.innerHeight });
+    updateViewportSize();
+    window.addEventListener("resize", updateViewportSize);
+    return () => window.removeEventListener("resize", updateViewportSize);
+  }, []);
 
   const fetchComments = useCallback(async () => {
     setIsLoading(true);
@@ -162,12 +170,17 @@ export const PageComments = forwardRef<TPageCommentsRef, Props>(function PageCom
   const directComments = comments.filter((item) => !item.is_inline);
   const activeComment = popover?.type === "detail" ? comments.find((item) => item.id === popover.commentId) : undefined;
   const anchorRect = popover?.type === "compose" ? popover.selection.rect : popover?.rect;
-  const popoverStyle = anchorRect
-    ? {
-        left: Math.max(16, Math.min(anchorRect.left, window.innerWidth - 352)),
-        top: Math.max(16, Math.min(anchorRect.bottom + 10, window.innerHeight - 300)),
-      }
-    : undefined;
+  const popoverWidth = Math.min(336, viewportSize.width - 32);
+  const popoverMaxHeight = Math.min(viewportSize.height * 0.7, 640);
+  const popoverStyle =
+    anchorRect && popoverWidth > 0 && popoverMaxHeight > 0
+      ? {
+          left: Math.max(16, Math.min(anchorRect.left, viewportSize.width - popoverWidth - 16)),
+          top: Math.max(16, Math.min(anchorRect.bottom + 10, viewportSize.height - popoverMaxHeight - 16)),
+          width: popoverWidth,
+          maxHeight: popoverMaxHeight,
+        }
+      : undefined;
 
   return (
     <>
@@ -177,9 +190,9 @@ export const PageComments = forwardRef<TPageCommentsRef, Props>(function PageCom
           role="dialog"
           aria-label={popover.type === "compose" ? "Add inline comment" : "Comment details"}
           style={popoverStyle}
-          className="fixed z-50 w-[336px] overflow-hidden rounded-xl border border-subtle bg-surface-1 shadow-raised-300"
+          className="fixed z-50 overflow-y-auto rounded-xl border border-subtle bg-surface-1 shadow-raised-300"
         >
-          <div className="flex items-center justify-between border-b border-subtle-1 px-4 py-3">
+          <div className="sticky top-0 flex items-center justify-between border-b border-subtle-1 bg-surface-1 px-4 py-3">
             <span className="text-13 font-semibold text-primary">
               {popover.type === "compose" ? "Comment on selection" : "Comment"}
             </span>
